@@ -448,18 +448,15 @@ tbody tr:hover { background: var(--accent-subtle); }
 }
 
 .code-block-file {
+  color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 12px;
-}
-
-.code-block-file a {
-  color: var(--accent);
   text-decoration: none;
 }
 
-.code-block-file a:hover {
+.code-block-file:hover {
+  color: var(--text);
   text-decoration: underline;
-  color: var(--accent-hover);
 }
 
 .copy-btn {
@@ -859,13 +856,13 @@ p code, li code {
 </tr>
 <tr>
   <td><strong>Lamport</strong> (this tutorial)</td>
-  <td>231,706</td>
+  <td>231,705</td>
   <td>8,192 bytes</td>
   <td><span class="badge-yes">Yes (hash)</span></td>
 </tr>
 <tr>
   <td><strong>LamportAccount</strong> (with Merkle)</td>
-  <td>747,316</td>
+  <td>753,940</td>
   <td>8,192 + proof</td>
   <td><span class="badge-yes">Yes</span></td>
 </tr>
@@ -910,7 +907,7 @@ p code, li code {
 
 <div class="callout callout-danger">
   <div class="callout-title">Harvest Now, Decrypt Later</div>
-  Adversaries are already recording encrypted blockchain data today, planning to decrypt it when quantum computers become available. Every ECDSA signature reveals the public key, creating a permanent record of vulnerability. Transactions signed today can be targeted tomorrow.
+  In blockchain systems, this risk mostly applies to confidential off-chain data, not to retroactively invalidating past transactions. The signature risk is forward-looking: once a cryptographically relevant quantum computer exists, any exposed ECDSA public key can be used to derive a private key and authorize new transactions.
 </div>
 
 <h2 id="ch1-nist">NIST Mandates and Timelines</h2>
@@ -922,22 +919,23 @@ p code, li code {
   <li><strong>By 2035</strong>: Completely disallow these algorithms</li>
 </ul>
 
-<p>NIST has finalized three post-quantum standards: <strong>FIPS 203</strong> (ML-KEM, for key encapsulation), <strong>FIPS 204</strong> (ML-DSA / Dilithium, for digital signatures), and <strong>FIPS 206</strong> (SLH-DSA / Falcon, for digital signatures). These are not proposals &mdash; they are published standards that organizations are expected to adopt.</p>
+<p>NIST's first published PQC standards are <strong>FIPS 203</strong> (ML-KEM, for key encapsulation), <strong>FIPS 204</strong> (ML-DSA / Dilithium, for digital signatures), and <strong>FIPS 205</strong> (SLH-DSA / SPHINCS+, for digital signatures). Falcon was selected for additional NIST standardization work as a separate track, but it is not part of that first published FIPS set.</p>
 
 <p>For Ethereum, this matters because institutional adoption depends on compliance with these standards. Exchanges, custodians, and financial institutions that touch regulated markets must follow NIST guidance. A quantum-vulnerable Ethereum becomes a compliance risk.</p>
 
 <h2 id="ch1-eth">Ethereum's Strawmap</h2>
 
-<p>The Ethereum Foundation has published a "Strawmap" &mdash; a phased roadmap for achieving full post-quantum resistance. The plan spans <strong>7 hard forks over 4 years</strong>, targeting complete PQ resistance by 2030:</p>
+<p>The Ethereum Foundation's post-quantum team publishes a <strong>living roadmap</strong>, not a fixed schedule. The current roadmap uses milestone labels across execution, consensus, and data layers and is explicitly subject to change as research, implementation, and governance evolve:</p>
 
 <ol>
-  <li><strong>Phase 1</strong> (2026): PQC precompiles for signature verification (EIP-8051 for Dilithium, EIP-8052 for Falcon)</li>
-  <li><strong>Phase 2</strong> (2027): Replace BLS signatures in the beacon chain consensus</li>
-  <li><strong>Phase 3</strong> (2028): Migrate KZG commitments to PQ-safe alternatives for data availability</li>
-  <li><strong>Phase 4</strong> (2029-2030): Replace Groth16 ZK proofs with PQ-safe proving systems</li>
+  <li><strong>I*</strong>: PQ key registry (consensus)</li>
+  <li><strong>J*</strong>: PQ signature precompiles / execution-layer verification support</li>
+  <li><strong>L*</strong>: PQ attestations, real-time CL proofs, leanVM (consensus + data)</li>
+  <li><strong>M*</strong>: PQ signature aggregation and PQ blobs (execution + data)</li>
+  <li><strong>Longer term</strong>: full PQ consensus, PQ transactions, and PQ sampling</li>
 </ol>
 
-<p>The precompile EIPs (8051 and 8052) are particularly relevant to this tutorial. They propose native Dilithium and Falcon verification at approximately <strong>3,000 gas</strong> &mdash; the same cost as ECDSA today. Until those ship, we build with pure-Solidity verifiers.</p>
+<p>For this tutorial, the relevant direction is the execution-layer work around lower-cost native PQ signature verification. The exact precompile shape, gas schedule, and shipping timeline are not fixed yet. Until then, we build with pure-Solidity and library-backed verifiers.</p>
 
 <h2 id="ch1-components">The Four Vulnerable Components</h2>
 
@@ -975,7 +973,7 @@ p code, li code {
   Two fully functional ERC-4337 quantum-resistant smart accounts:
   <ol style="margin-top: 8px;">
     <li><strong>LamportAccount</strong> &mdash; Hash-based one-time signatures using only <code>keccak256</code>. Simple, auditable, ~230K gas.</li>
-    <li><strong>FalconAccount</strong> &mdash; Lattice-based signatures via ZKNox's ETHFALCON. Production-grade, NIST standard, ~1.5M gas.</li>
+    <li><strong>FalconAccount</strong> &mdash; Lattice-based signatures via ZKNox's ETHFALCON. Compact signatures, library-backed today, ~1.5M gas.</li>
   </ol>
   Plus a factory contract to deploy both, tested and ready for Base Sepolia.
 </div>
@@ -1025,179 +1023,251 @@ Pair 255:[left_255,right_255] -->  [H(left_255),H(right_255)]
 </div>
 
 <h2 id="ch2-verifier">LamportVerifier.sol</h2>
-<p>The verifier implements the core algorithm: loop through 256 bits, hash each preimage, compare against the public key. It also includes a <code>verifyWithRoot()</code> variant that checks a Merkle root of the public key hashes, enabling compact on-chain storage.</p>
+<p>The verifier implements the core algorithm: loop through 256 bits, hash each preimage, compare against the public key. It also includes a <code>verifyWithRoot()</code> variant that compresses one Lamport public key into a leaf root and verifies that leaf against the account-level Merkle root.</p>
 
 <div class="code-block-wrapper">
   <div class="code-block-header">
-    <span class="code-block-file"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/lamport/LamportVerifier.sol" target="_blank" rel="noopener">src/lamport/LamportVerifier.sol</a></span>
+    <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/lamport/LamportVerifier.sol" target="_blank" rel="noopener">src/lamport/LamportVerifier.sol</a>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
   </div>
-  <pre><code><span class="cmt">// SPDX-License-Identifier: MIT</span>
-<span class="kw">pragma solidity</span> <span class="str">^0.8.25</span>;
+  <pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.34;
 
-<span class="cmt">/// @title LamportVerifier &mdash; Quantum-resistant signature verification using only keccak256</span>
-<span class="cmt">/// @notice Lamport one-time signatures: the simplest post-quantum scheme.</span>
-<span class="cmt">///         Security relies solely on hash preimage resistance &mdash; no lattices, no curves.</span>
-<span class="kw">contract</span> <span class="type">LamportVerifier</span> {
-    <span class="cmt">/// @notice Verify a Lamport signature against a public key</span>
-    <span class="kw">function</span> <span class="fn">verify</span>(
-        <span class="type">bytes32</span> <span class="var">msgHash</span>,
-        <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">calldata</span> <span class="var">pubKeyHashes</span>,
-        <span class="type">bytes32</span>[<span class="num">256</span>] <span class="kw">calldata</span> <span class="var">signature</span>
-    ) <span class="kw">external</span> <span class="kw">pure</span> <span class="kw">returns</span> (<span class="type">bool</span> <span class="var">valid</span>) {
-        <span class="kw">for</span> (<span class="type">uint256</span> <span class="var">i</span> = <span class="num">0</span>; i &lt; <span class="num">256</span>; i++) {
-            <span class="cmt">// Extract bit i from the message hash</span>
-            <span class="type">uint256</span> <span class="var">bit</span> = (<span class="builtin">uint256</span>(msgHash) &gt;&gt; (<span class="num">255</span> - i)) &amp; <span class="num">1</span>;
+/// @title LamportVerifier — Quantum-resistant signature verification using only keccak256
+/// @notice Lamport one-time signatures: the simplest post-quantum scheme.
+///         Security relies solely on hash preimage resistance — no lattices, no curves.
+///
+/// How it works:
+///   Key generation: Generate 256 pairs of random 32-byte values. Hash each → 512 hashes = public key.
+///   Signing: For each bit of the message hash, reveal the left or right preimage from that pair.
+///   Verification: Hash each revealed preimage and compare against the stored public key hash.
+///
+/// Gas cost: ~300K (256 keccak256 ops + calldata for 256 x 32-byte preimages)
+contract LamportVerifier {
+    /// @notice Verify a Lamport signature against a public key
+    /// @param msgHash The 32-byte hash of the message being verified
+    /// @param pubKeyHashes The 512 hashes that form the public key [pair0_left, pair0_right, pair1_left, ...]
+    /// @param signature The 256 revealed preimages (one per bit of msgHash)
+    /// @return valid True if the signature is valid
+    function verify(
+        bytes32 msgHash,
+        bytes32[512] calldata pubKeyHashes,
+        bytes32[256] calldata signature
+    ) external pure returns (bool valid) {
+        for (uint256 i = 0; i &lt; 256; i++) {
+            // Extract bit i from the message hash
+            uint256 bit = (uint256(msgHash) &gt;&gt; (255 - i)) &amp; 1;
 
-            <span class="cmt">// Hash the revealed preimage</span>
-            <span class="type">bytes32</span> <span class="var">computed</span> = <span class="builtin">keccak256</span>(<span class="builtin">abi.encodePacked</span>(signature[i]));
+            // The signer revealed the preimage for the left (bit=0) or right (bit=1) hash
+            // Compute the hash of the revealed preimage
+            bytes32 computed = keccak256(abi.encodePacked(signature[i]));
 
-            <span class="cmt">// Compare against the correct public key hash</span>
-            <span class="type">bytes32</span> <span class="var">expected</span> = pubKeyHashes[<span class="num">2</span> * i + bit];
+            // Compare against the correct public key hash
+            // pubKeyHashes[2*i] = hash of left value, pubKeyHashes[2*i+1] = hash of right value
+            bytes32 expected = pubKeyHashes[2 * i + bit];
 
-            <span class="kw">if</span> (computed != expected) {
-                <span class="kw">return</span> <span class="num">false</span>;
+            if (computed != expected) {
+                return false;
             }
         }
-        <span class="kw">return</span> <span class="num">true</span>;
+        return true;
     }
 
-    <span class="cmt">/// @notice Verify using a compact Merkle root instead of the full 512-hash public key</span>
-    <span class="kw">function</span> <span class="fn">verifyWithRoot</span>(
-        <span class="type">bytes32</span> <span class="var">msgHash</span>,
-        <span class="type">bytes32</span> <span class="var">pubKeyRoot</span>,
-        <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">calldata</span> <span class="var">pubKeyHashes</span>,
-        <span class="type">bytes32</span>[<span class="num">256</span>] <span class="kw">calldata</span> <span class="var">signature</span>
-    ) <span class="kw">external</span> <span class="kw">pure</span> <span class="kw">returns</span> (<span class="type">bool</span> <span class="var">valid</span>) {
-        <span class="cmt">// Verify the public key hashes match the stored root</span>
-        <span class="type">bytes32</span> <span class="var">computedRoot</span> = <span class="fn">_computeMerkleRoot</span>(pubKeyHashes);
-        <span class="kw">if</span> (computedRoot != pubKeyRoot) {
-            <span class="kw">return</span> <span class="num">false</span>;
+    /// @notice Verify using an account-level Merkle root instead of the full 512-hash public key
+    /// @dev The Lamport public key hashes are first compressed into a leaf root, then checked against the account root
+    /// @param msgHash Message hash to verify
+    /// @param accountRoot Merkle root of all Lamport leaf roots registered on the account
+    /// @param pubKeyHashes Full 512 public key hashes (verified against root)
+    /// @param signature The 256 revealed preimages
+    /// @param leafIndex Index of the Lamport leaf within the account-level Merkle tree
+    /// @param merkleProof Sibling hashes proving the Lamport leaf against `accountRoot`
+    /// @return valid True if both the Merkle root matches and the signature is valid
+    function verifyWithRoot(
+        bytes32 msgHash,
+        bytes32 accountRoot,
+        bytes32[512] calldata pubKeyHashes,
+        bytes32[256] calldata signature,
+        uint256 leafIndex,
+        bytes32[] calldata merkleProof
+    ) external pure returns (bool valid) {
+        bytes32 lamportRoot = _computeMerkleRoot(pubKeyHashes);
+        if (!_verifyProof(lamportRoot, leafIndex, merkleProof, accountRoot)) {
+            return false;
         }
 
-        <span class="cmt">// Then verify the signature against those hashes</span>
-        <span class="kw">for</span> (<span class="type">uint256</span> <span class="var">i</span> = <span class="num">0</span>; i &lt; <span class="num">256</span>; i++) {
-            <span class="type">uint256</span> <span class="var">bit</span> = (<span class="builtin">uint256</span>(msgHash) &gt;&gt; (<span class="num">255</span> - i)) &amp; <span class="num">1</span>;
-            <span class="type">bytes32</span> <span class="var">computed</span> = <span class="builtin">keccak256</span>(<span class="builtin">abi.encodePacked</span>(signature[i]));
-            <span class="type">bytes32</span> <span class="var">expected</span> = pubKeyHashes[<span class="num">2</span> * i + bit];
-            <span class="kw">if</span> (computed != expected) {
-                <span class="kw">return</span> <span class="num">false</span>;
+        for (uint256 i = 0; i &lt; 256; i++) {
+            uint256 bit = (uint256(msgHash) &gt;&gt; (255 - i)) &amp; 1;
+            bytes32 computed = keccak256(abi.encodePacked(signature[i]));
+            bytes32 expected = pubKeyHashes[2 * i + bit];
+            if (computed != expected) {
+                return false;
             }
         }
-        <span class="kw">return</span> <span class="num">true</span>;
+        return true;
     }
 
-    <span class="cmt">/// @notice Compute the Merkle root of 512 leaf hashes</span>
-    <span class="kw">function</span> <span class="fn">_computeMerkleRoot</span>(<span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">calldata</span> <span class="var">leaves</span>) <span class="kw">internal</span> <span class="kw">pure</span> <span class="kw">returns</span> (<span class="type">bytes32</span>) {
-        <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> <span class="var">layer</span>;
-        <span class="kw">for</span> (<span class="type">uint256</span> <span class="var">i</span> = <span class="num">0</span>; i &lt; <span class="num">512</span>; i++) {
+    /// @notice Compute the Merkle root of the 512 Lamport public key hashes
+    function _computeMerkleRoot(bytes32[512] calldata leaves) internal pure returns (bytes32) {
+        bytes32[512] memory layer;
+        for (uint256 i = 0; i &lt; 512; i++) {
             layer[i] = leaves[i];
         }
 
-        <span class="type">uint256</span> <span class="var">n</span> = <span class="num">512</span>;
-        <span class="kw">while</span> (n &gt; <span class="num">1</span>) {
-            <span class="kw">for</span> (<span class="type">uint256</span> <span class="var">i</span> = <span class="num">0</span>; i &lt; n / <span class="num">2</span>; i++) {
-                layer[i] = <span class="builtin">keccak256</span>(<span class="builtin">abi.encodePacked</span>(layer[<span class="num">2</span> * i], layer[<span class="num">2</span> * i + <span class="num">1</span>]));
+        uint256 n = 512;
+        while (n &gt; 1) {
+            for (uint256 i = 0; i &lt; n / 2; i++) {
+                layer[i] = keccak256(abi.encodePacked(layer[2 * i], layer[2 * i + 1]));
             }
-            n /= <span class="num">2</span>;
+            n /= 2;
         }
-        <span class="kw">return</span> layer[<span class="num">0</span>];
+        return layer[0];
     }
-}</code></pre>
+
+    function _verifyProof(
+        bytes32 leaf,
+        uint256 leafIndex,
+        bytes32[] calldata merkleProof,
+        bytes32 expectedRoot
+    ) internal pure returns (bool) {
+        bytes32 computed = leaf;
+        uint256 idx = leafIndex;
+
+        for (uint256 i = 0; i &lt; merkleProof.length; i++) {
+            bytes32 sibling = merkleProof[i];
+            if ((idx &amp; 1) == 0) {
+                computed = keccak256(abi.encodePacked(computed, sibling));
+            } else {
+                computed = keccak256(abi.encodePacked(sibling, computed));
+            }
+            idx &gt;&gt;= 1;
+        }
+
+        return computed == expectedRoot;
+    }
+}
+</code></pre>
 </div>
 
 <h2 id="ch2-account">LamportAccount.sol</h2>
-<p>The account contract wraps the verifier into an ERC-4337 compatible smart account. It stores a Merkle root of Lamport public keys and tracks which key index to use next. Each <code>validateUserOp</code> call verifies one Lamport signature and advances the key index.</p>
+<p>The account contract wraps the verifier into an ERC-4337 compatible smart account. It stores an account-level Merkle root of Lamport leaf roots, requires the configured EntryPoint to call <code>validateUserOp</code>, checks the userOp nonce, and consumes exactly one Lamport leaf per successful validation.</p>
 
 <div class="code-block-wrapper">
   <div class="code-block-header">
-    <span class="code-block-file"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/lamport/LamportAccount.sol" target="_blank" rel="noopener">src/lamport/LamportAccount.sol</a></span>
+    <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/lamport/LamportAccount.sol" target="_blank" rel="noopener">src/lamport/LamportAccount.sol</a>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
   </div>
-  <pre><code><span class="cmt">// SPDX-License-Identifier: MIT</span>
-<span class="kw">pragma solidity</span> <span class="str">^0.8.25</span>;
+  <pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.34;
 
-<span class="kw">import</span> {<span class="type">IAccount</span>, <span class="type">UserOperation</span>} <span class="kw">from</span> <span class="str">"../interfaces/IAccount.sol"</span>;
-<span class="kw">import</span> {<span class="type">LamportVerifier</span>} <span class="kw">from</span> <span class="str">"./LamportVerifier.sol"</span>;
+import {IAccount, UserOperation} from &quot;../interfaces/IAccount.sol&quot;;
+import {LamportVerifier} from &quot;./LamportVerifier.sol&quot;;
 
-<span class="cmt">/// @title LamportAccount &mdash; Quantum-resistant smart account using Lamport signatures</span>
-<span class="cmt">/// @notice ERC-4337 compatible account that verifies Lamport one-time signatures.</span>
-<span class="cmt">///         Uses a Merkle tree of Lamport public keys to support multiple transactions.</span>
-<span class="kw">contract</span> <span class="type">LamportAccount</span> <span class="kw">is</span> <span class="type">IAccount</span> {
-    <span class="type">LamportVerifier</span> <span class="kw">public</span> <span class="kw">immutable</span> <span class="var">verifier</span>;
-    <span class="type">bytes32</span> <span class="kw">public</span> <span class="var">publicKeyRoot</span>;
-    <span class="type">uint256</span> <span class="kw">public</span> <span class="var">nextKeyIndex</span>;
-    <span class="type">address</span> <span class="kw">public</span> <span class="var">owner</span>;
-    <span class="type">uint256</span> <span class="kw">public</span> <span class="var">nonce</span>;
+/// @title LamportAccount — Quantum-resistant smart account using Lamport signatures
+/// @notice ERC-4337 compatible account that verifies Lamport one-time signatures.
+///         Uses a Merkle tree of Lamport public keys to support multiple transactions
+///         from a single compact root.
+///
+/// Key management:
+///   - Owner registers a Merkle root of 2^TREE_HEIGHT Lamport public keys
+///   - Each transaction uses the next unused leaf (one-time signature)
+///   - The contract tracks which leaf index is next via `nextKeyIndex`
+///   - When all leaves are used, the owner registers a new Merkle root
+contract LamportAccount is IAccount {
+    LamportVerifier public immutable verifier;
+    address public immutable entryPoint;
+    bytes32 public publicKeyRoot;
+    uint256 public nextKeyIndex;
+    address public owner;
+    uint256 public nonce;
 
-    <span class="type">uint256</span> <span class="kw">internal</span> <span class="kw">constant</span> <span class="var">SIG_VALIDATION_FAILED</span> = <span class="num">1</span>;
+    uint256 internal constant SIG_VALIDATION_FAILED = 1;
 
-    <span class="kw">event</span> <span class="ev">KeyRootUpdated</span>(<span class="type">bytes32</span> <span class="kw">indexed</span> newRoot);
-    <span class="kw">event</span> <span class="ev">Executed</span>(<span class="type">address</span> <span class="kw">indexed</span> target, <span class="type">uint256</span> value, <span class="type">bytes</span> data);
+    event KeyRootUpdated(bytes32 indexed newRoot);
+    event Executed(address indexed target, uint256 value, bytes data);
 
-    <span class="kw">error</span> <span class="type">OnlyOwner</span>();
-    <span class="kw">error</span> <span class="type">OnlyEntryPointOrOwner</span>();
-    <span class="kw">error</span> <span class="type">InvalidSignature</span>();
-    <span class="kw">error</span> <span class="type">ExecutionFailed</span>();
+    error OnlyEntryPoint();
+    error OnlyOwner();
+    error OnlyEntryPointOrOwner();
+    error ExecutionFailed();
 
-    <span class="kw">modifier</span> <span class="fn">onlyOwner</span>() {
-        <span class="kw">if</span> (<span class="builtin">msg.sender</span> != owner) <span class="kw">revert</span> <span class="type">OnlyOwner</span>();
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert OnlyOwner();
         _;
     }
 
-    <span class="kw">constructor</span>(<span class="type">address</span> <span class="var">_verifier</span>, <span class="type">bytes32</span> <span class="var">_publicKeyRoot</span>, <span class="type">address</span> <span class="var">_owner</span>) {
-        verifier = <span class="type">LamportVerifier</span>(_verifier);
+    constructor(address _verifier, bytes32 _publicKeyRoot, address _entryPoint, address _owner) {
+        verifier = LamportVerifier(_verifier);
+        entryPoint = _entryPoint;
         publicKeyRoot = _publicKeyRoot;
         owner = _owner;
     }
 
-    <span class="cmt">/// @notice ERC-4337 signature validation</span>
-    <span class="cmt">/// @dev Signature format: abi.encode(bytes32[512] pubKeyHashes, bytes32[256] lamportSig)</span>
-    <span class="kw">function</span> <span class="fn">validateUserOp</span>(
-        <span class="type">UserOperation</span> <span class="kw">calldata</span> <span class="var">userOp</span>,
-        <span class="type">bytes32</span> <span class="var">userOpHash</span>,
-        <span class="type">uint256</span> <span class="var">missingAccountFunds</span>
-    ) <span class="kw">external</span> <span class="kw">override</span> <span class="kw">returns</span> (<span class="type">uint256</span> <span class="var">validationData</span>) {
-        <span class="cmt">// Decode the Lamport signature from userOp.signature</span>
-        (<span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> <span class="var">pubKeyHashes</span>, <span class="type">bytes32</span>[<span class="num">256</span>] <span class="kw">memory</span> <span class="var">lamportSig</span>) =
-            <span class="builtin">abi.decode</span>(userOp.signature, (<span class="type">bytes32</span>[<span class="num">512</span>], <span class="type">bytes32</span>[<span class="num">256</span>]));
-
-        <span class="cmt">// Verify the Lamport signature against the userOp hash</span>
-        <span class="type">bool</span> <span class="var">valid</span> = verifier.<span class="fn">verifyWithRoot</span>(userOpHash, publicKeyRoot, pubKeyHashes, lamportSig);
-
-        <span class="kw">if</span> (!valid) {
-            <span class="kw">return</span> SIG_VALIDATION_FAILED;
+    /// @notice ERC-4337 signature validation
+    /// @dev Signature format:
+    ///      abi.encode(bytes32[512] pubKeyHashes, bytes32[256] lamportSig, uint256 leafIndex, bytes32[] proof)
+    function validateUserOp(
+        UserOperation calldata userOp,
+        bytes32 userOpHash,
+        uint256 missingAccountFunds
+    ) external override returns (uint256 validationData) {
+        if (msg.sender != entryPoint) revert OnlyEntryPoint();
+        if (userOp.sender != address(this) || userOp.nonce != nonce) {
+            return SIG_VALIDATION_FAILED;
         }
 
-        <span class="cmt">// Increment key index (each Lamport key is one-time use)</span>
+        (
+            bytes32[512] memory pubKeyHashes,
+            bytes32[256] memory lamportSig,
+            uint256 leafIndex,
+            bytes32[] memory merkleProof
+        ) = abi.decode(userOp.signature, (bytes32[512], bytes32[256], uint256, bytes32[]));
+
+        if (leafIndex != nextKeyIndex) {
+            return SIG_VALIDATION_FAILED;
+        }
+
+        bool valid = verifier.verifyWithRoot(
+            userOpHash,
+            publicKeyRoot,
+            pubKeyHashes,
+            lamportSig,
+            leafIndex,
+            merkleProof
+        );
+
+        if (!valid) {
+            return SIG_VALIDATION_FAILED;
+        }
+
         nextKeyIndex++;
         nonce++;
 
-        <span class="cmt">// Pay the EntryPoint if needed</span>
-        <span class="kw">if</span> (missingAccountFunds &gt; <span class="num">0</span>) {
-            (<span class="type">bool</span> <span class="var">success</span>,) = <span class="kw">payable</span>(<span class="builtin">msg.sender</span>).<span class="fn">call</span>{<span class="var">value</span>: missingAccountFunds}(<span class="str">""</span>);
-            (success); <span class="cmt">// ignore failure (EntryPoint will handle it)</span>
+        if (missingAccountFunds &gt; 0) {
+            (bool success,) = payable(entryPoint).call{value: missingAccountFunds}(&quot;&quot;);
+            (success); // ignore failure (EntryPoint will handle it)
         }
 
-        <span class="kw">return</span> <span class="num">0</span>; <span class="cmt">// success</span>
+        return 0; // success
     }
 
-    <span class="cmt">/// @notice Execute a call from this account</span>
-    <span class="kw">function</span> <span class="fn">execute</span>(<span class="type">address</span> <span class="var">target</span>, <span class="type">uint256</span> <span class="var">value</span>, <span class="type">bytes</span> <span class="kw">calldata</span> <span class="var">data</span>) <span class="kw">external</span> {
-        (<span class="type">bool</span> <span class="var">success</span>,) = target.<span class="fn">call</span>{<span class="var">value</span>: value}(data);
-        <span class="kw">if</span> (!success) <span class="kw">revert</span> <span class="type">ExecutionFailed</span>();
-        <span class="kw">emit</span> <span class="ev">Executed</span>(target, value, data);
+    /// @notice Execute a call from this account (only owner or EntryPoint after validation)
+    function execute(address target, uint256 value, bytes calldata data) external {
+        if (msg.sender != owner &amp;&amp; msg.sender != entryPoint) revert OnlyEntryPointOrOwner();
+        (bool success,) = target.call{value: value}(data);
+        if (!success) revert ExecutionFailed();
+        emit Executed(target, value, data);
     }
 
-    <span class="cmt">/// @notice Update the Lamport key tree root (for key rotation)</span>
-    <span class="kw">function</span> <span class="fn">updateKeyRoot</span>(<span class="type">bytes32</span> <span class="var">newRoot</span>) <span class="kw">external</span> <span class="fn">onlyOwner</span> {
+    /// @notice Update the Lamport key tree root (for key rotation)
+    function updateKeyRoot(bytes32 newRoot) external onlyOwner {
         publicKeyRoot = newRoot;
-        nextKeyIndex = <span class="num">0</span>;
-        <span class="kw">emit</span> <span class="ev">KeyRootUpdated</span>(newRoot);
+        nextKeyIndex = 0;
+        emit KeyRootUpdated(newRoot);
     }
 
-    <span class="kw">receive</span>() <span class="kw">external</span> <span class="kw">payable</span> {}
-}</code></pre>
+    receive() external payable {}
+}
+</code></pre>
 </div>
 
 <h2 id="ch2-tests">Tests</h2>
@@ -1206,143 +1276,240 @@ Pair 255:[left_255,right_255] -->  [H(left_255),H(right_255)]
 <div class="collapsible" id="col-lamport-test">
   <button class="collapsible-toggle" onclick="toggleCollapsible('col-lamport-test')">
     <span class="collapsible-arrow">&#9654;</span>
-    test/lamport/LamportVerifier.t.sol &mdash; Full test suite (139 lines)
+    test/lamport/LamportVerifier.t.sol &mdash; Full test suite (225 lines)
   </button>
   <div class="collapsible-body">
     <div class="code-block-wrapper">
       <div class="code-block-header">
-        <span class="code-block-file"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/test/lamport/LamportVerifier.t.sol" target="_blank" rel="noopener">test/lamport/LamportVerifier.t.sol</a></span>
+        <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/test/lamport/LamportVerifier.t.sol" target="_blank" rel="noopener">test/lamport/LamportVerifier.t.sol</a>
         <button class="copy-btn" onclick="copyCode(this)">Copy</button>
       </div>
-      <pre><code><span class="cmt">// SPDX-License-Identifier: MIT</span>
-<span class="kw">pragma solidity</span> <span class="str">^0.8.25</span>;
+      <pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.34;
 
-<span class="kw">import</span> <span class="str">"forge-std/Test.sol"</span>;
-<span class="kw">import</span> <span class="str">"../../src/lamport/LamportVerifier.sol"</span>;
+import &quot;forge-std/Test.sol&quot;;
+import &quot;../../src/lamport/LamportVerifier.sol&quot;;
 
-<span class="kw">contract</span> <span class="type">LamportVerifierTest</span> <span class="kw">is</span> <span class="type">Test</span> {
-    <span class="type">LamportVerifier</span> <span class="kw">public</span> <span class="var">verifier</span>;
+contract LamportVerifierTest is Test {
+    uint256 internal constant LEAF_COUNT = 4;
 
-    <span class="kw">function</span> <span class="fn">setUp</span>() <span class="kw">public</span> {
-        verifier = <span class="kw">new</span> <span class="type">LamportVerifier</span>();
+    LamportVerifier public verifier;
+
+    function setUp() public {
+        verifier = new LamportVerifier();
     }
 
-    <span class="cmt">/// @notice Generate a deterministic Lamport keypair from a seed</span>
-    <span class="kw">function</span> <span class="fn">_generateKeypair</span>(<span class="type">bytes32</span> <span class="var">seed</span>)
-        <span class="kw">internal</span> <span class="kw">pure</span>
-        <span class="kw">returns</span> (<span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> <span class="var">pubKeyHashes</span>, <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> <span class="var">privateKeys</span>)
+    function test_VerifyValidSignature() public view {
+        bytes32 seed = keccak256(&quot;test-seed-1&quot;);
+        (bytes32[512] memory pubKeyHashes, bytes32[512] memory privateKeys) = _generateKeypair(seed);
+
+        bytes32 msgHash = keccak256(&quot;hello quantum world&quot;);
+        bytes32[256] memory signature = _sign(msgHash, privateKeys);
+
+        bool valid = verifier.verify(msgHash, pubKeyHashes, signature);
+        assertTrue(valid, &quot;Valid Lamport signature should verify&quot;);
+    }
+
+    function test_RejectInvalidSignature() public view {
+        bytes32 seed = keccak256(&quot;test-seed-2&quot;);
+        (bytes32[512] memory pubKeyHashes, bytes32[512] memory privateKeys) = _generateKeypair(seed);
+
+        bytes32 msgHash = keccak256(&quot;hello quantum world&quot;);
+        bytes32[256] memory signature = _sign(msgHash, privateKeys);
+        signature[0] = bytes32(uint256(signature[0]) ^ 1);
+
+        bool valid = verifier.verify(msgHash, pubKeyHashes, signature);
+        assertFalse(valid, &quot;Corrupted signature should fail verification&quot;);
+    }
+
+    function test_RejectWrongMessage() public view {
+        bytes32 seed = keccak256(&quot;test-seed-3&quot;);
+        (bytes32[512] memory pubKeyHashes, bytes32[512] memory privateKeys) = _generateKeypair(seed);
+
+        bytes32 msgHash = keccak256(&quot;original message&quot;);
+        bytes32[256] memory signature = _sign(msgHash, privateKeys);
+
+        bytes32 wrongHash = keccak256(&quot;different message&quot;);
+        bool valid = verifier.verify(wrongHash, pubKeyHashes, signature);
+        assertFalse(valid, &quot;Signature for wrong message should fail&quot;);
+    }
+
+    function test_VerifyWithAccountRoot() public view {
+        bytes32[LEAF_COUNT] memory leafRoots;
+        bytes32[512] memory pubKeyHashes;
+        bytes32[512] memory privateKeys;
+
+        for (uint256 leafIndex = 0; leafIndex &lt; LEAF_COUNT; leafIndex++) {
+            (bytes32[512] memory leafPubKeyHashes, bytes32[512] memory leafPrivateKeys) =
+                _generateKeypair(keccak256(abi.encodePacked(&quot;leaf&quot;, leafIndex)));
+            leafRoots[leafIndex] = _computeLamportRoot(leafPubKeyHashes);
+
+            if (leafIndex == 2) {
+                pubKeyHashes = leafPubKeyHashes;
+                privateKeys = leafPrivateKeys;
+            }
+        }
+
+        bytes32 accountRoot = _computeAccountRoot(leafRoots);
+        bytes32[] memory proof = _buildProof(leafRoots, 2);
+        bytes32 msgHash = keccak256(&quot;merkle root test&quot;);
+        bytes32[256] memory signature = _sign(msgHash, privateKeys);
+
+        bool valid = verifier.verifyWithRoot(msgHash, accountRoot, pubKeyHashes, signature, 2, proof);
+        assertTrue(valid, &quot;Valid signature with correct account root should verify&quot;);
+    }
+
+    function test_RejectWrongMerkleProof() public view {
+        bytes32[LEAF_COUNT] memory leafRoots;
+        bytes32[512] memory pubKeyHashes;
+        bytes32[512] memory privateKeys;
+
+        for (uint256 leafIndex = 0; leafIndex &lt; LEAF_COUNT; leafIndex++) {
+            (bytes32[512] memory leafPubKeyHashes, bytes32[512] memory leafPrivateKeys) =
+                _generateKeypair(keccak256(abi.encodePacked(&quot;leaf&quot;, leafIndex)));
+            leafRoots[leafIndex] = _computeLamportRoot(leafPubKeyHashes);
+
+            if (leafIndex == 1) {
+                pubKeyHashes = leafPubKeyHashes;
+                privateKeys = leafPrivateKeys;
+            }
+        }
+
+        bytes32 accountRoot = _computeAccountRoot(leafRoots);
+        bytes32[] memory proof = _buildProof(leafRoots, 1);
+        proof[0] = bytes32(uint256(proof[0]) ^ 1);
+
+        bytes32 msgHash = keccak256(&quot;merkle root test&quot;);
+        bytes32[256] memory signature = _sign(msgHash, privateKeys);
+
+        bool valid = verifier.verifyWithRoot(msgHash, accountRoot, pubKeyHashes, signature, 1, proof);
+        assertFalse(valid, &quot;Wrong proof should fail&quot;);
+    }
+
+    function test_RejectWrongLeafIndex() public view {
+        bytes32[LEAF_COUNT] memory leafRoots;
+        bytes32[512] memory pubKeyHashes;
+        bytes32[512] memory privateKeys;
+
+        for (uint256 leafIndex = 0; leafIndex &lt; LEAF_COUNT; leafIndex++) {
+            (bytes32[512] memory leafPubKeyHashes, bytes32[512] memory leafPrivateKeys) =
+                _generateKeypair(keccak256(abi.encodePacked(&quot;leaf&quot;, leafIndex)));
+            leafRoots[leafIndex] = _computeLamportRoot(leafPubKeyHashes);
+
+            if (leafIndex == 1) {
+                pubKeyHashes = leafPubKeyHashes;
+                privateKeys = leafPrivateKeys;
+            }
+        }
+
+        bytes32 accountRoot = _computeAccountRoot(leafRoots);
+        bytes32[] memory proof = _buildProof(leafRoots, 1);
+        bytes32 msgHash = keccak256(&quot;merkle root test&quot;);
+        bytes32[256] memory signature = _sign(msgHash, privateKeys);
+
+        bool valid = verifier.verifyWithRoot(msgHash, accountRoot, pubKeyHashes, signature, 0, proof);
+        assertFalse(valid, &quot;Mismatched leaf index should fail&quot;);
+    }
+
+    function test_GasCost() public {
+        bytes32 seed = keccak256(&quot;gas-test&quot;);
+        (bytes32[512] memory pubKeyHashes, bytes32[512] memory privateKeys) = _generateKeypair(seed);
+
+        bytes32 msgHash = keccak256(&quot;measure gas&quot;);
+        bytes32[256] memory signature = _sign(msgHash, privateKeys);
+
+        uint256 gasBefore = gasleft();
+        verifier.verify(msgHash, pubKeyHashes, signature);
+        uint256 gasUsed = gasBefore - gasleft();
+
+        emit log_named_uint(&quot;Lamport verify gas&quot;, gasUsed);
+        assertLt(gasUsed, 500_000, &quot;Lamport verification should cost less than 500K gas&quot;);
+    }
+
+    function _generateKeypair(bytes32 seed)
+        internal
+        pure
+        returns (bytes32[512] memory pubKeyHashes, bytes32[512] memory privateKeys)
     {
-        <span class="kw">for</span> (<span class="type">uint256</span> <span class="var">i</span> = <span class="num">0</span>; i &lt; <span class="num">512</span>; i++) {
-            privateKeys[i] = <span class="builtin">keccak256</span>(<span class="builtin">abi.encodePacked</span>(seed, i));
-            pubKeyHashes[i] = <span class="builtin">keccak256</span>(<span class="builtin">abi.encodePacked</span>(privateKeys[i]));
+        for (uint256 i = 0; i &lt; 512; i++) {
+            privateKeys[i] = keccak256(abi.encodePacked(seed, i));
+            pubKeyHashes[i] = keccak256(abi.encodePacked(privateKeys[i]));
         }
     }
 
-    <span class="cmt">/// @notice Sign a message hash using a Lamport private key</span>
-    <span class="kw">function</span> <span class="fn">_sign</span>(<span class="type">bytes32</span> <span class="var">msgHash</span>, <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> <span class="var">privateKeys</span>)
-        <span class="kw">internal</span> <span class="kw">pure</span>
-        <span class="kw">returns</span> (<span class="type">bytes32</span>[<span class="num">256</span>] <span class="kw">memory</span> <span class="var">signature</span>)
+    function _sign(bytes32 msgHash, bytes32[512] memory privateKeys)
+        internal
+        pure
+        returns (bytes32[256] memory signature)
     {
-        <span class="kw">for</span> (<span class="type">uint256</span> <span class="var">i</span> = <span class="num">0</span>; i &lt; <span class="num">256</span>; i++) {
-            <span class="type">uint256</span> <span class="var">bit</span> = (<span class="builtin">uint256</span>(msgHash) &gt;&gt; (<span class="num">255</span> - i)) &amp; <span class="num">1</span>;
-            signature[i] = privateKeys[<span class="num">2</span> * i + bit];
+        for (uint256 i = 0; i &lt; 256; i++) {
+            uint256 bit = (uint256(msgHash) &gt;&gt; (255 - i)) &amp; 1;
+            signature[i] = privateKeys[2 * i + bit];
         }
     }
 
-    <span class="kw">function</span> <span class="fn">test_VerifyValidSignature</span>() <span class="kw">public</span> <span class="kw">view</span> {
-        <span class="type">bytes32</span> <span class="var">seed</span> = <span class="builtin">keccak256</span>(<span class="str">"test-seed-1"</span>);
-        (<span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> pubKeyHashes, <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> privateKeys) = <span class="fn">_generateKeypair</span>(seed);
-
-        <span class="type">bytes32</span> <span class="var">msgHash</span> = <span class="builtin">keccak256</span>(<span class="str">"hello quantum world"</span>);
-        <span class="type">bytes32</span>[<span class="num">256</span>] <span class="kw">memory</span> signature = <span class="fn">_sign</span>(msgHash, privateKeys);
-
-        <span class="type">bool</span> <span class="var">valid</span> = verifier.<span class="fn">verify</span>(msgHash, pubKeyHashes, signature);
-        <span class="fn">assertTrue</span>(valid, <span class="str">"Valid Lamport signature should verify"</span>);
-    }
-
-    <span class="kw">function</span> <span class="fn">test_RejectInvalidSignature</span>() <span class="kw">public</span> <span class="kw">view</span> {
-        <span class="type">bytes32</span> <span class="var">seed</span> = <span class="builtin">keccak256</span>(<span class="str">"test-seed-2"</span>);
-        (<span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> pubKeyHashes, <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> privateKeys) = <span class="fn">_generateKeypair</span>(seed);
-
-        <span class="type">bytes32</span> <span class="var">msgHash</span> = <span class="builtin">keccak256</span>(<span class="str">"hello quantum world"</span>);
-        <span class="type">bytes32</span>[<span class="num">256</span>] <span class="kw">memory</span> signature = <span class="fn">_sign</span>(msgHash, privateKeys);
-
-        <span class="cmt">// Corrupt one preimage</span>
-        signature[<span class="num">0</span>] = <span class="builtin">bytes32</span>(<span class="builtin">uint256</span>(signature[<span class="num">0</span>]) ^ <span class="num">1</span>);
-
-        <span class="type">bool</span> <span class="var">valid</span> = verifier.<span class="fn">verify</span>(msgHash, pubKeyHashes, signature);
-        <span class="fn">assertFalse</span>(valid, <span class="str">"Corrupted signature should fail verification"</span>);
-    }
-
-    <span class="kw">function</span> <span class="fn">test_RejectWrongMessage</span>() <span class="kw">public</span> <span class="kw">view</span> {
-        <span class="type">bytes32</span> <span class="var">seed</span> = <span class="builtin">keccak256</span>(<span class="str">"test-seed-3"</span>);
-        (<span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> pubKeyHashes, <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> privateKeys) = <span class="fn">_generateKeypair</span>(seed);
-
-        <span class="type">bytes32</span> <span class="var">msgHash</span> = <span class="builtin">keccak256</span>(<span class="str">"original message"</span>);
-        <span class="type">bytes32</span>[<span class="num">256</span>] <span class="kw">memory</span> signature = <span class="fn">_sign</span>(msgHash, privateKeys);
-
-        <span class="type">bytes32</span> <span class="var">wrongHash</span> = <span class="builtin">keccak256</span>(<span class="str">"different message"</span>);
-        <span class="type">bool</span> <span class="var">valid</span> = verifier.<span class="fn">verify</span>(wrongHash, pubKeyHashes, signature);
-        <span class="fn">assertFalse</span>(valid, <span class="str">"Signature for wrong message should fail"</span>);
-    }
-
-    <span class="kw">function</span> <span class="fn">test_VerifyWithMerkleRoot</span>() <span class="kw">public</span> <span class="kw">view</span> {
-        <span class="type">bytes32</span> <span class="var">seed</span> = <span class="builtin">keccak256</span>(<span class="str">"test-seed-4"</span>);
-        (<span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> pubKeyHashes, <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> privateKeys) = <span class="fn">_generateKeypair</span>(seed);
-
-        <span class="type">bytes32</span> <span class="var">msgHash</span> = <span class="builtin">keccak256</span>(<span class="str">"merkle root test"</span>);
-        <span class="type">bytes32</span>[<span class="num">256</span>] <span class="kw">memory</span> signature = <span class="fn">_sign</span>(msgHash, privateKeys);
-
-        <span class="type">bytes32</span> <span class="var">root</span> = <span class="fn">_computeRoot</span>(pubKeyHashes);
-
-        <span class="type">bool</span> <span class="var">valid</span> = verifier.<span class="fn">verifyWithRoot</span>(msgHash, root, pubKeyHashes, signature);
-        <span class="fn">assertTrue</span>(valid, <span class="str">"Valid signature with correct Merkle root should verify"</span>);
-    }
-
-    <span class="kw">function</span> <span class="fn">test_RejectWrongMerkleRoot</span>() <span class="kw">public</span> <span class="kw">view</span> {
-        <span class="type">bytes32</span> <span class="var">seed</span> = <span class="builtin">keccak256</span>(<span class="str">"test-seed-5"</span>);
-        (<span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> pubKeyHashes, <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> privateKeys) = <span class="fn">_generateKeypair</span>(seed);
-
-        <span class="type">bytes32</span> <span class="var">msgHash</span> = <span class="builtin">keccak256</span>(<span class="str">"merkle root test"</span>);
-        <span class="type">bytes32</span>[<span class="num">256</span>] <span class="kw">memory</span> signature = <span class="fn">_sign</span>(msgHash, privateKeys);
-
-        <span class="type">bytes32</span> <span class="var">wrongRoot</span> = <span class="builtin">keccak256</span>(<span class="str">"wrong root"</span>);
-
-        <span class="type">bool</span> <span class="var">valid</span> = verifier.<span class="fn">verifyWithRoot</span>(msgHash, wrongRoot, pubKeyHashes, signature);
-        <span class="fn">assertFalse</span>(valid, <span class="str">"Wrong Merkle root should fail"</span>);
-    }
-
-    <span class="kw">function</span> <span class="fn">test_GasCost</span>() <span class="kw">public</span> {
-        <span class="type">bytes32</span> <span class="var">seed</span> = <span class="builtin">keccak256</span>(<span class="str">"gas-test"</span>);
-        (<span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> pubKeyHashes, <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> privateKeys) = <span class="fn">_generateKeypair</span>(seed);
-
-        <span class="type">bytes32</span> <span class="var">msgHash</span> = <span class="builtin">keccak256</span>(<span class="str">"measure gas"</span>);
-        <span class="type">bytes32</span>[<span class="num">256</span>] <span class="kw">memory</span> signature = <span class="fn">_sign</span>(msgHash, privateKeys);
-
-        <span class="type">uint256</span> <span class="var">gasBefore</span> = <span class="builtin">gasleft</span>();
-        verifier.<span class="fn">verify</span>(msgHash, pubKeyHashes, signature);
-        <span class="type">uint256</span> <span class="var">gasUsed</span> = gasBefore - <span class="builtin">gasleft</span>();
-
-        <span class="kw">emit</span> <span class="fn">log_named_uint</span>(<span class="str">"Lamport verify gas"</span>, gasUsed);
-        <span class="fn">assertLt</span>(gasUsed, <span class="num">500_000</span>, <span class="str">"Lamport verification should cost less than 500K gas"</span>);
-    }
-
-    <span class="cmt">/// @dev Mirror the contract's Merkle root computation for test assertions</span>
-    <span class="kw">function</span> <span class="fn">_computeRoot</span>(<span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> <span class="var">leaves</span>) <span class="kw">internal</span> <span class="kw">pure</span> <span class="kw">returns</span> (<span class="type">bytes32</span>) {
-        <span class="type">bytes32</span>[<span class="num">512</span>] <span class="kw">memory</span> <span class="var">layer</span>;
-        <span class="kw">for</span> (<span class="type">uint256</span> <span class="var">i</span> = <span class="num">0</span>; i &lt; <span class="num">512</span>; i++) {
+    function _computeLamportRoot(bytes32[512] memory leaves) internal pure returns (bytes32) {
+        bytes32[512] memory layer;
+        for (uint256 i = 0; i &lt; 512; i++) {
             layer[i] = leaves[i];
         }
-        <span class="type">uint256</span> <span class="var">n</span> = <span class="num">512</span>;
-        <span class="kw">while</span> (n &gt; <span class="num">1</span>) {
-            <span class="kw">for</span> (<span class="type">uint256</span> <span class="var">i</span> = <span class="num">0</span>; i &lt; n / <span class="num">2</span>; i++) {
-                layer[i] = <span class="builtin">keccak256</span>(<span class="builtin">abi.encodePacked</span>(layer[<span class="num">2</span> * i], layer[<span class="num">2</span> * i + <span class="num">1</span>]));
+
+        uint256 n = 512;
+        while (n &gt; 1) {
+            for (uint256 i = 0; i &lt; n / 2; i++) {
+                layer[i] = keccak256(abi.encodePacked(layer[2 * i], layer[2 * i + 1]));
             }
-            n /= <span class="num">2</span>;
+            n /= 2;
         }
-        <span class="kw">return</span> layer[<span class="num">0</span>];
+
+        return layer[0];
     }
-}</code></pre>
+
+    function _computeAccountRoot(bytes32[LEAF_COUNT] memory leaves) internal pure returns (bytes32) {
+        bytes32[LEAF_COUNT] memory layer;
+        for (uint256 i = 0; i &lt; LEAF_COUNT; i++) {
+            layer[i] = leaves[i];
+        }
+        uint256 n = LEAF_COUNT;
+
+        while (n &gt; 1) {
+            for (uint256 i = 0; i &lt; n / 2; i++) {
+                layer[i] = keccak256(abi.encodePacked(layer[2 * i], layer[2 * i + 1]));
+            }
+            n /= 2;
+        }
+
+        return layer[0];
+    }
+
+    function _buildProof(bytes32[LEAF_COUNT] memory leaves, uint256 leafIndex)
+        internal
+        pure
+        returns (bytes32[] memory proof)
+    {
+        proof = new bytes32[](2);
+        bytes32[LEAF_COUNT] memory layer;
+        for (uint256 i = 0; i &lt; LEAF_COUNT; i++) {
+            layer[i] = leaves[i];
+        }
+        uint256 idx = leafIndex;
+        uint256 n = LEAF_COUNT;
+        uint256 proofIndex;
+
+        while (n &gt; 1) {
+            uint256 siblingIndex = idx ^ 1;
+            proof[proofIndex++] = layer[siblingIndex];
+
+            for (uint256 i = 0; i &lt; n / 2; i++) {
+                layer[i] = keccak256(abi.encodePacked(layer[2 * i], layer[2 * i + 1]));
+            }
+
+            idx /= 2;
+            n /= 2;
+        }
+    }
+}
+</code></pre>
     </div>
   </div>
 </div>
@@ -1393,7 +1560,7 @@ forge install 0xsequence/sstore2</code></pre>
 <p><strong>Expected output:</strong></p>
 <div class="code-block-wrapper">
   <div class="code-block-header"><span class="code-block-lang">output</span></div>
-  <pre><code>Compiling 29 files with Solc 0.8.25
+  <pre><code>Compiling with Solc 0.8.34
 Compiler run successful!</code></pre>
 </div>
 
@@ -1402,24 +1569,16 @@ Compiler run successful!</code></pre>
   <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
   <pre><code>forge test --match-path "test/lamport/*" -vv</code></pre>
 </div>
-<p><strong>Expected output (12 tests, all PASS):</strong></p>
+<p><strong>Expected output (18 tests, all PASS):</strong></p>
 <div class="code-block-wrapper">
   <div class="code-block-header"><span class="code-block-lang">output</span></div>
-  <pre><code>[PASS] test_GasCost() (gas: 607377)
-  Lamport verify gas: 231706
-[PASS] test_RejectInvalidSignature()
-[PASS] test_RejectWrongMerkleRoot()
-[PASS] test_RejectWrongMessage()
-[PASS] test_VerifyValidSignature()
-[PASS] test_VerifyWithMerkleRoot()
-[PASS] test_Execute()
+  <pre><code>[PASS] test_GasCost()
+  Lamport verify gas: 231705
+[PASS] test_VerifyWithAccountRoot()
+[PASS] test_ValidateUserOp_RejectsReplay()
 [PASS] test_GasCost_ValidateUserOp()
-  LamportAccount validateUserOp gas: 747316
-[PASS] test_UpdateKeyRoot()
-[PASS] test_UpdateKeyRoot_OnlyOwner()
-[PASS] test_ValidateUserOp_InvalidSignature()
-[PASS] test_ValidateUserOp_ValidSignature()
-12 tests passed, 0 failed</code></pre>
+  LamportAccount validateUserOp gas: 753940
+18 tests passed, 0 failed</code></pre>
 </div>
 
 <p><strong>What the tests prove:</strong></p>
@@ -1427,9 +1586,10 @@ Compiler run successful!</code></pre>
   <li><code>test_VerifyValidSignature</code> &mdash; A valid Lamport signature (256 correct preimages) verifies against 512 public key hashes</li>
   <li><code>test_RejectInvalidSignature</code> &mdash; Flipping a single bit in one preimage causes verification to fail</li>
   <li><code>test_RejectWrongMessage</code> &mdash; A signature for "original message" fails when checked against "different message"</li>
-  <li><code>test_VerifyWithMerkleRoot</code> &mdash; The full 512 public key hashes are verified against a compact 32-byte Merkle root</li>
-  <li><code>test_ValidateUserOp_ValidSignature</code> &mdash; The full ERC-4337 flow: decode signature from UserOperation, verify via Merkle root, increment nonce</li>
-  <li><code>test_GasCost</code> &mdash; Pure verification costs <strong>231,706 gas</strong>. The full smart account validateUserOp costs <strong>747,316 gas</strong> (includes Merkle root computation + state updates)</li>
+  <li><code>test_VerifyWithAccountRoot</code> &mdash; A Lamport leaf root is proven against the account-level Merkle root with an explicit leaf index and proof</li>
+  <li><code>test_ValidateUserOp_ValidSignature</code> &mdash; The ERC-4337 flow enforces EntryPoint-only validation, nonce checks, and one-time Lamport leaf usage</li>
+  <li><code>test_ValidateUserOp_RejectsReplay</code> &mdash; Replaying the same signed userOp fails once the nonce and next Lamport leaf index advance</li>
+  <li><code>test_GasCost</code> &mdash; Pure verification costs <strong>231,705 gas</strong>. Full <code>validateUserOp</code> costs <strong>753,940 gas</strong> in the current implementation.</li>
 </ul>
 
 <h2 id="ch2-cp">Checkpoint</h2>
@@ -1437,7 +1597,7 @@ Compiler run successful!</code></pre>
   <div class="checkpoint-box"><span class="checkpoint-check">&#10003;</span></div>
   <div class="checkpoint-text">
     <div class="checkpoint-label">Checkpoint &mdash; Lamport Tests Pass</div>
-    <div class="checkpoint-desc">You should see: 12 tests passed, 0 failed. Lamport verify: 231,706 gas. LamportAccount validateUserOp: 747,316 gas.</div>
+    <div class="checkpoint-desc">You should see: 18 tests passed, 0 failed. Lamport verify: 231,705 gas. LamportAccount validateUserOp: 753,940 gas.</div>
   </div>
 </div>
 
@@ -1449,11 +1609,11 @@ Compiler run successful!</code></pre>
 <section class="chapter" id="ch3">
 <span class="chapter-label">Chapter 3</span>
 <h1>Production PQC &mdash; Falcon-512 with ETHFALCON</h1>
-<p class="chapter-subtitle">Lattice-based signatures, NIST standardized, EVM-verified</p>
+<p class="chapter-subtitle">Lattice-based signatures, compact enough for real account-abstraction experiments</p>
 
 <h2 id="ch3-what">What is Falcon-512?</h2>
 
-<p>Falcon (Fast-Fourier Lattice-based Compact Signatures over NTRU) is one of three digital signature schemes standardized by NIST as <strong>FIPS 206</strong>. It is based on the hardness of the NTRU lattice problem and the Short Integer Solution (SIS) problem &mdash; problems that remain hard even for quantum computers.</p>
+<p>Falcon (Fast-Fourier Lattice-based Compact Signatures over NTRU) is a compact lattice-based digital signature scheme built on the hardness of NTRU-style problems and related short-vector assumptions. NIST selected Falcon for additional post-quantum standardization work, but it is separate from the first published PQC FIPS set.</p>
 
 <p>Key properties of Falcon-512:</p>
 <ul>
@@ -1479,104 +1639,120 @@ Compiler run successful!</code></pre>
 
 <div class="code-block-wrapper">
   <div class="code-block-header">
-    <span class="code-block-file"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/falcon/FalconAccount.sol" target="_blank" rel="noopener">src/falcon/FalconAccount.sol</a></span>
+    <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/falcon/FalconAccount.sol" target="_blank" rel="noopener">src/falcon/FalconAccount.sol</a>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
   </div>
-  <pre><code><span class="cmt">// SPDX-License-Identifier: MIT</span>
-<span class="kw">pragma solidity</span> <span class="str">^0.8.25</span>;
+  <pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.34;
 
-<span class="kw">import</span> {<span class="type">IAccount</span>, <span class="type">UserOperation</span>} <span class="kw">from</span> <span class="str">"../interfaces/IAccount.sol"</span>;
-<span class="kw">import</span> {<span class="type">ISigVerifier</span>} <span class="kw">from</span> <span class="str">"InterfaceVerifier/IVerifier.sol"</span>;
+import {IAccount, UserOperation} from &quot;../interfaces/IAccount.sol&quot;;
+import {ISigVerifier} from &quot;InterfaceVerifier/IVerifier.sol&quot;;
 
-<span class="cmt">/// @title FalconAccount &mdash; Quantum-resistant smart account using Falcon-512 (ETHFALCON)</span>
-<span class="cmt">/// @notice ERC-4337 compatible account that verifies Falcon-512 lattice-based signatures.</span>
-<span class="cmt">///         Uses ZKNox's ETHFALCON variant (Keccak instead of SHAKE) for ~1.5M gas verification.</span>
-<span class="kw">contract</span> <span class="type">FalconAccount</span> <span class="kw">is</span> <span class="type">IAccount</span> {
-    <span class="type">ISigVerifier</span> <span class="kw">public</span> <span class="kw">immutable</span> <span class="var">falconVerifier</span>;
-    <span class="type">address</span> <span class="kw">public</span> <span class="var">owner</span>;
-    <span class="type">uint256</span> <span class="kw">public</span> <span class="var">nonce</span>;
+/// @title FalconAccount — Quantum-resistant smart account using Falcon-512 (ETHFALCON)
+/// @notice ERC-4337 compatible account that verifies Falcon-512 lattice-based signatures.
+///         Uses ZKNox&#x27;s ETHFALCON variant (Keccak instead of SHAKE) for ~1.5M gas verification.
+///
+/// Architecture:
+///   - Public key (897 bytes in NTT domain) is stored at account creation
+///   - Off-chain signer generates Falcon-512 signatures
+///   - validateUserOp calls ETHFALCON.verify() to check the signature
+///   - Gas cost: ~1.5M per verification (vs 3,000 for ECDSA)
+contract FalconAccount is IAccount {
+    ISigVerifier public immutable falconVerifier;
+    address public immutable entryPoint;
+    address public owner;
+    uint256 public nonce;
 
-    <span class="cmt">// Falcon public key stored as SSTORE2 pointer</span>
-    <span class="type">bytes</span> <span class="kw">public</span> <span class="var">storedPubKeyPointer</span>;
+    // Falcon public key stored as SSTORE2 pointer (returned from setKey)
+    bytes public storedPubKeyPointer;
 
-    <span class="cmt">// The raw public key data for reference</span>
-    <span class="type">bytes</span> <span class="kw">public</span> <span class="var">rawPublicKey</span>;
+    // The raw public key data for reference
+    bytes public rawPublicKey;
 
-    <span class="type">uint256</span> <span class="kw">internal</span> <span class="kw">constant</span> <span class="var">SIG_VALIDATION_FAILED</span> = <span class="num">1</span>;
+    uint256 internal constant SIG_VALIDATION_FAILED = 1;
 
-    <span class="kw">event</span> <span class="ev">Executed</span>(<span class="type">address</span> <span class="kw">indexed</span> target, <span class="type">uint256</span> value, <span class="type">bytes</span> data);
-    <span class="kw">event</span> <span class="ev">PublicKeyUpdated</span>();
+    event Executed(address indexed target, uint256 value, bytes data);
+    event PublicKeyUpdated();
 
-    <span class="kw">error</span> <span class="type">OnlyOwner</span>();
-    <span class="kw">error</span> <span class="type">ExecutionFailed</span>();
-    <span class="kw">error</span> <span class="type">PublicKeyNotSet</span>();
+    error OnlyEntryPoint();
+    error OnlyOwner();
+    error ExecutionFailed();
+    error PublicKeyNotSet();
 
-    <span class="kw">modifier</span> <span class="fn">onlyOwner</span>() {
-        <span class="kw">if</span> (<span class="builtin">msg.sender</span> != owner) <span class="kw">revert</span> <span class="type">OnlyOwner</span>();
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert OnlyOwner();
         _;
     }
 
-    <span class="cmt">// ISigVerifier.verify.selector = bytes4(keccak256("verify(bytes,bytes32,bytes)"))</span>
-    <span class="type">bytes4</span> <span class="kw">internal</span> <span class="kw">constant</span> <span class="var">VERIFY_SUCCESS</span> = <span class="num">0x024ad318</span>;
+    // ISigVerifier.verify.selector = bytes4(keccak256(&quot;verify(bytes,bytes32,bytes)&quot;))
+    bytes4 internal constant VERIFY_SUCCESS = 0x024ad318;
 
-    <span class="kw">constructor</span>(<span class="type">address</span> <span class="var">_falconVerifier</span>, <span class="type">bytes</span> <span class="kw">memory</span> <span class="var">_publicKey</span>, <span class="type">address</span> <span class="var">_owner</span>) {
-        falconVerifier = <span class="type">ISigVerifier</span>(_falconVerifier);
+    constructor(address _falconVerifier, bytes memory _publicKey, address _entryPoint, address _owner) {
+        falconVerifier = ISigVerifier(_falconVerifier);
+        entryPoint = _entryPoint;
         owner = _owner;
 
-        <span class="cmt">// Store the public key via ETHFALCON's setKey (uses SSTORE2)</span>
-        <span class="kw">if</span> (_publicKey.length &gt; <span class="num">0</span>) {
-            storedPubKeyPointer = falconVerifier.<span class="fn">setKey</span>(_publicKey);
+        // Store the public key via ETHFALCON&#x27;s setKey (uses SSTORE2)
+        if (_publicKey.length &gt; 0) {
+            storedPubKeyPointer = falconVerifier.setKey(_publicKey);
             rawPublicKey = _publicKey;
         }
     }
 
-    <span class="cmt">/// @notice ERC-4337 signature validation using Falcon-512</span>
-    <span class="cmt">/// @dev Signature format: raw Falcon signature bytes (salt + s2 encoded)</span>
-    <span class="kw">function</span> <span class="fn">validateUserOp</span>(
-        <span class="type">UserOperation</span> <span class="kw">calldata</span> <span class="var">userOp</span>,
-        <span class="type">bytes32</span> <span class="var">userOpHash</span>,
-        <span class="type">uint256</span> <span class="var">missingAccountFunds</span>
-    ) <span class="kw">external</span> <span class="kw">override</span> <span class="kw">returns</span> (<span class="type">uint256</span> <span class="var">validationData</span>) {
-        <span class="kw">if</span> (storedPubKeyPointer.length == <span class="num">0</span>) <span class="kw">revert</span> <span class="type">PublicKeyNotSet</span>();
+    /// @notice ERC-4337 signature validation using Falcon-512
+    /// @dev Signature format: raw Falcon signature bytes (salt + s2 encoded)
+    ///      The public key is read from the stored SSTORE2 pointer
+    function validateUserOp(
+        UserOperation calldata userOp,
+        bytes32 userOpHash,
+        uint256 missingAccountFunds
+    ) external override returns (uint256 validationData) {
+        if (msg.sender != entryPoint) revert OnlyEntryPoint();
+        if (storedPubKeyPointer.length == 0) revert PublicKeyNotSet();
+        if (userOp.sender != address(this) || userOp.nonce != nonce) {
+            return SIG_VALIDATION_FAILED;
+        }
 
-        <span class="cmt">// Call ETHFALCON's ISigVerifier.verify(pubkey, hash, signature)</span>
-        <span class="type">bytes4</span> <span class="var">result</span> = falconVerifier.<span class="fn">verify</span>(
+        bytes4 result = falconVerifier.verify(
             storedPubKeyPointer,
             userOpHash,
             userOp.signature
         );
 
-        <span class="kw">if</span> (result != VERIFY_SUCCESS) {
-            <span class="kw">return</span> SIG_VALIDATION_FAILED;
+        if (result != VERIFY_SUCCESS) {
+            return SIG_VALIDATION_FAILED;
         }
 
         nonce++;
 
-        <span class="cmt">// Pay the EntryPoint if needed</span>
-        <span class="kw">if</span> (missingAccountFunds &gt; <span class="num">0</span>) {
-            (<span class="type">bool</span> <span class="var">success</span>,) = <span class="kw">payable</span>(<span class="builtin">msg.sender</span>).<span class="fn">call</span>{<span class="var">value</span>: missingAccountFunds}(<span class="str">""</span>);
+        if (missingAccountFunds &gt; 0) {
+            (bool success,) = payable(entryPoint).call{value: missingAccountFunds}(&quot;&quot;);
             (success);
         }
 
-        <span class="kw">return</span> <span class="num">0</span>;
+        return 0;
     }
 
-    <span class="cmt">/// @notice Execute a call from this account</span>
-    <span class="kw">function</span> <span class="fn">execute</span>(<span class="type">address</span> <span class="var">target</span>, <span class="type">uint256</span> <span class="var">value</span>, <span class="type">bytes</span> <span class="kw">calldata</span> <span class="var">data</span>) <span class="kw">external</span> {
-        (<span class="type">bool</span> <span class="var">success</span>,) = target.<span class="fn">call</span>{<span class="var">value</span>: value}(data);
-        <span class="kw">if</span> (!success) <span class="kw">revert</span> <span class="type">ExecutionFailed</span>();
-        <span class="kw">emit</span> <span class="ev">Executed</span>(target, value, data);
+    error OnlyEntryPointOrOwner();
+
+    /// @notice Execute a call from this account (only owner or EntryPoint after validation)
+    function execute(address target, uint256 value, bytes calldata data) external {
+        if (msg.sender != owner &amp;&amp; msg.sender != entryPoint) revert OnlyEntryPointOrOwner();
+        (bool success,) = target.call{value: value}(data);
+        if (!success) revert ExecutionFailed();
+        emit Executed(target, value, data);
     }
 
-    <span class="cmt">/// @notice Update the Falcon public key</span>
-    <span class="kw">function</span> <span class="fn">updatePublicKey</span>(<span class="type">bytes</span> <span class="kw">memory</span> <span class="var">newKey</span>) <span class="kw">external</span> <span class="fn">onlyOwner</span> {
-        storedPubKeyPointer = falconVerifier.<span class="fn">setKey</span>(newKey);
+    /// @notice Update the Falcon public key
+    function updatePublicKey(bytes memory newKey) external onlyOwner {
+        storedPubKeyPointer = falconVerifier.setKey(newKey);
         rawPublicKey = newKey;
-        <span class="kw">emit</span> <span class="ev">PublicKeyUpdated</span>();
+        emit PublicKeyUpdated();
     }
 
-    <span class="kw">receive</span>() <span class="kw">external</span> <span class="kw">payable</span> {}
-}</code></pre>
+    receive() external payable {}
+}
+</code></pre>
 </div>
 
 <h2 id="ch3-tests">Tests with Mock Verifier</h2>
@@ -1585,134 +1761,159 @@ Compiler run successful!</code></pre>
 <div class="collapsible" id="col-falcon-test">
   <button class="collapsible-toggle" onclick="toggleCollapsible('col-falcon-test')">
     <span class="collapsible-arrow">&#9654;</span>
-    test/falcon/FalconAccount.t.sol &mdash; Full test suite (135 lines)
+    test/falcon/FalconAccount.t.sol &mdash; Full test suite (144 lines)
   </button>
   <div class="collapsible-body">
     <div class="code-block-wrapper">
       <div class="code-block-header">
-        <span class="code-block-file"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/test/falcon/FalconAccount.t.sol" target="_blank" rel="noopener">test/falcon/FalconAccount.t.sol</a></span>
+        <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/test/falcon/FalconAccount.t.sol" target="_blank" rel="noopener">test/falcon/FalconAccount.t.sol</a>
         <button class="copy-btn" onclick="copyCode(this)">Copy</button>
       </div>
-      <pre><code><span class="cmt">// SPDX-License-Identifier: MIT</span>
-<span class="kw">pragma solidity</span> <span class="str">^0.8.25</span>;
+      <pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.34;
 
-<span class="kw">import</span> <span class="str">"forge-std/Test.sol"</span>;
-<span class="kw">import</span> <span class="str">"../../src/falcon/FalconAccount.sol"</span>;
-<span class="kw">import</span> <span class="str">"../../src/interfaces/IAccount.sol"</span>;
-<span class="kw">import</span> {<span class="type">ISigVerifier</span>} <span class="kw">from</span> <span class="str">"InterfaceVerifier/IVerifier.sol"</span>;
+import &quot;forge-std/Test.sol&quot;;
+import &quot;../../src/falcon/FalconAccount.sol&quot;;
+import &quot;../../src/interfaces/IAccount.sol&quot;;
+import {ISigVerifier} from &quot;InterfaceVerifier/IVerifier.sol&quot;;
 
-<span class="cmt">/// @notice Mock Falcon verifier for unit testing the account contract plumbing.</span>
-<span class="cmt">///         Real Falcon verification tests require off-chain signature generation.</span>
-<span class="kw">contract</span> <span class="type">MockFalconVerifier</span> <span class="kw">is</span> <span class="type">ISigVerifier</span> {
-    <span class="type">bytes32</span> <span class="kw">public</span> <span class="var">validHash</span>;
-    <span class="type">bytes</span> <span class="kw">public</span> <span class="var">validSignature</span>;
-    <span class="type">bool</span> <span class="kw">public</span> <span class="var">shouldPass</span>;
+contract MockFalconVerifier is ISigVerifier {
+    bool public shouldPass = true;
 
-    <span class="kw">constructor</span>() {
-        shouldPass = <span class="num">true</span>;
-    }
-
-    <span class="kw">function</span> <span class="fn">setValidSignature</span>(<span class="type">bytes32</span> <span class="var">_hash</span>, <span class="type">bytes</span> <span class="kw">memory</span> <span class="var">_sig</span>) <span class="kw">external</span> {
-        validHash = _hash;
-        validSignature = _sig;
-    }
-
-    <span class="kw">function</span> <span class="fn">setShouldPass</span>(<span class="type">bool</span> <span class="var">_pass</span>) <span class="kw">external</span> {
+    function setShouldPass(bool _pass) external {
         shouldPass = _pass;
     }
 
-    <span class="kw">function</span> <span class="fn">setKey</span>(<span class="type">bytes</span> <span class="kw">calldata</span>) <span class="kw">external</span> <span class="kw">pure</span> <span class="kw">returns</span> (<span class="type">bytes</span> <span class="kw">memory</span>) {
-        <span class="kw">return</span> <span class="builtin">abi.encodePacked</span>(<span class="type">address</span>(<span class="num">0x1234567890123456789012345678901234567890</span>));
+    function setKey(bytes calldata) external pure returns (bytes memory) {
+        return abi.encodePacked(address(0x1234567890123456789012345678901234567890));
     }
 
-    <span class="kw">function</span> <span class="fn">verify</span>(<span class="type">bytes</span> <span class="kw">calldata</span>, <span class="type">bytes32</span>, <span class="type">bytes</span> <span class="kw">calldata</span>)
-        <span class="kw">external</span> <span class="kw">view</span> <span class="kw">returns</span> (<span class="type">bytes4</span>)
+    function verify(bytes calldata, bytes32, bytes calldata)
+        external
+        view
+        returns (bytes4)
     {
-        <span class="kw">if</span> (shouldPass) {
-            <span class="kw">return</span> <span class="type">ISigVerifier</span>.verify.<span class="var">selector</span>;
+        if (shouldPass) {
+            return ISigVerifier.verify.selector;
         }
-        <span class="kw">return</span> <span class="num">0xFFFFFFFF</span>;
+        return 0xFFFFFFFF;
     }
 }
 
-<span class="kw">contract</span> <span class="type">FalconAccountTest</span> <span class="kw">is</span> <span class="type">Test</span> {
-    <span class="type">MockFalconVerifier</span> <span class="kw">public</span> <span class="var">mockVerifier</span>;
-    <span class="type">FalconAccount</span> <span class="kw">public</span> <span class="var">account</span>;
-    <span class="type">address</span> <span class="kw">constant</span> <span class="var">OWNER</span> = <span class="type">address</span>(<span class="num">0xBEEF</span>);
+contract FalconAccountTest is Test {
+    MockFalconVerifier public mockVerifier;
+    FalconAccount public account;
 
-    <span class="kw">function</span> <span class="fn">setUp</span>() <span class="kw">public</span> {
-        mockVerifier = <span class="kw">new</span> <span class="type">MockFalconVerifier</span>();
-        <span class="type">bytes</span> <span class="kw">memory</span> <span class="var">dummyPubKey</span> = <span class="kw">hex</span><span class="str">"DEADBEEF"</span>;
-        account = <span class="kw">new</span> <span class="type">FalconAccount</span>(<span class="builtin">address</span>(mockVerifier), dummyPubKey, OWNER);
-        <span class="builtin">vm.deal</span>(<span class="builtin">address</span>(account), <span class="num">10</span> <span class="kw">ether</span>);
+    address internal constant OWNER = address(0xBEEF);
+
+    function setUp() public {
+        mockVerifier = new MockFalconVerifier();
+        account = new FalconAccount(address(mockVerifier), hex&quot;DEADBEEF&quot;, address(this), OWNER);
+        vm.deal(address(account), 10 ether);
     }
 
-    <span class="kw">function</span> <span class="fn">test_ValidateUserOp_ValidSignature</span>() <span class="kw">public</span> {
-        <span class="type">UserOperation</span> <span class="kw">memory</span> <span class="var">userOp</span> = <span class="fn">_buildUserOp</span>(<span class="kw">hex</span><span class="str">"CAFEBABE"</span>);
-        <span class="type">bytes32</span> <span class="var">userOpHash</span> = <span class="builtin">keccak256</span>(<span class="str">"test-falcon-op"</span>);
+    function test_ValidateUserOp_ValidSignature() public {
+        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 0);
+        bytes32 userOpHash = keccak256(&quot;test-falcon-op&quot;);
 
-        mockVerifier.<span class="fn">setShouldPass</span>(<span class="num">true</span>);
-
-        <span class="type">uint256</span> <span class="var">result</span> = account.<span class="fn">validateUserOp</span>(userOp, userOpHash, <span class="num">0</span>);
-        <span class="fn">assertEq</span>(result, <span class="num">0</span>, <span class="str">"Valid signature should return 0"</span>);
-        <span class="fn">assertEq</span>(account.<span class="fn">nonce</span>(), <span class="num">1</span>, <span class="str">"Nonce should increment"</span>);
+        uint256 result = account.validateUserOp(userOp, userOpHash, 0);
+        assertEq(result, 0, &quot;Valid signature should return 0&quot;);
+        assertEq(account.nonce(), 1, &quot;Nonce should increment&quot;);
     }
 
-    <span class="kw">function</span> <span class="fn">test_ValidateUserOp_InvalidSignature</span>() <span class="kw">public</span> {
-        <span class="type">UserOperation</span> <span class="kw">memory</span> <span class="var">userOp</span> = <span class="fn">_buildUserOp</span>(<span class="kw">hex</span><span class="str">"CAFEBABE"</span>);
-        <span class="type">bytes32</span> <span class="var">userOpHash</span> = <span class="builtin">keccak256</span>(<span class="str">"test-falcon-op"</span>);
+    function test_ValidateUserOp_InvalidSignature() public {
+        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 0);
+        bytes32 userOpHash = keccak256(&quot;test-falcon-op&quot;);
 
-        mockVerifier.<span class="fn">setShouldPass</span>(<span class="num">false</span>);
+        mockVerifier.setShouldPass(false);
 
-        <span class="type">uint256</span> <span class="var">result</span> = account.<span class="fn">validateUserOp</span>(userOp, userOpHash, <span class="num">0</span>);
-        <span class="fn">assertEq</span>(result, <span class="num">1</span>, <span class="str">"Invalid signature should return SIG_VALIDATION_FAILED"</span>);
-        <span class="fn">assertEq</span>(account.<span class="fn">nonce</span>(), <span class="num">0</span>, <span class="str">"Nonce should NOT increment"</span>);
+        uint256 result = account.validateUserOp(userOp, userOpHash, 0);
+        assertEq(result, 1, &quot;Invalid signature should return SIG_VALIDATION_FAILED&quot;);
+        assertEq(account.nonce(), 0, &quot;Nonce should NOT increment&quot;);
     }
 
-    <span class="kw">function</span> <span class="fn">test_Execute</span>() <span class="kw">public</span> {
-        <span class="type">address</span> <span class="var">recipient</span> = <span class="type">address</span>(<span class="num">0xCAFE</span>);
-        account.<span class="fn">execute</span>(recipient, <span class="num">1</span> <span class="kw">ether</span>, <span class="str">""</span>);
-        <span class="fn">assertEq</span>(recipient.balance, <span class="num">1</span> <span class="kw">ether</span>);
+    function test_ValidateUserOp_RejectsReplay() public {
+        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 0);
+        bytes32 userOpHash = keccak256(&quot;test-falcon-op&quot;);
+        uint256 balanceBefore = address(this).balance;
+
+        uint256 firstResult = account.validateUserOp(userOp, userOpHash, 0.1 ether);
+        uint256 secondResult = account.validateUserOp(userOp, userOpHash, 0.1 ether);
+
+        assertEq(firstResult, 0, &quot;First validation should pass&quot;);
+        assertEq(secondResult, 1, &quot;Replay should fail once nonce advances&quot;);
+        assertEq(account.nonce(), 1, &quot;Nonce should only increment once&quot;);
+        assertEq(address(this).balance - balanceBefore, 0.1 ether, &quot;EntryPoint should only receive one prefund payment&quot;);
     }
 
-    <span class="kw">function</span> <span class="fn">test_UpdatePublicKey_OnlyOwner</span>() <span class="kw">public</span> {
-        <span class="builtin">vm.prank</span>(OWNER);
-        account.<span class="fn">updatePublicKey</span>(<span class="kw">hex</span><span class="str">"AABBCCDD"</span>);
+    function test_ValidateUserOp_RejectsWrongNonce() public {
+        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 9);
+        bytes32 userOpHash = keccak256(&quot;test-falcon-op&quot;);
 
-        <span class="builtin">vm.prank</span>(<span class="type">address</span>(<span class="num">0xDEAD</span>));
-        <span class="builtin">vm.expectRevert</span>(<span class="type">FalconAccount</span>.OnlyOwner.<span class="var">selector</span>);
-        account.<span class="fn">updatePublicKey</span>(<span class="kw">hex</span><span class="str">"EEEE"</span>);
+        uint256 result = account.validateUserOp(userOp, userOpHash, 0);
+        assertEq(result, 1, &quot;Wrong nonce should fail&quot;);
     }
 
-    <span class="kw">function</span> <span class="fn">test_ValidatePaysFunds</span>() <span class="kw">public</span> {
-        <span class="type">UserOperation</span> <span class="kw">memory</span> <span class="var">userOp</span> = <span class="fn">_buildUserOp</span>(<span class="kw">hex</span><span class="str">"CAFEBABE"</span>);
-        <span class="type">bytes32</span> <span class="var">userOpHash</span> = <span class="builtin">keccak256</span>(<span class="str">"pay-test"</span>);
-        mockVerifier.<span class="fn">setShouldPass</span>(<span class="num">true</span>);
+    function test_ValidateUserOp_RevertsForNonEntryPoint() public {
+        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 0);
+        bytes32 userOpHash = keccak256(&quot;test-falcon-op&quot;);
 
-        <span class="type">address</span> <span class="var">entryPoint</span> = <span class="builtin">address</span>(<span class="kw">this</span>);
-        <span class="type">uint256</span> <span class="var">balBefore</span> = entryPoint.balance;
-
-        account.<span class="fn">validateUserOp</span>(userOp, userOpHash, <span class="num">0.1</span> <span class="kw">ether</span>);
-
-        <span class="fn">assertEq</span>(entryPoint.balance - balBefore, <span class="num">0.1</span> <span class="kw">ether</span>, <span class="str">"Should pay missingAccountFunds"</span>);
+        vm.prank(address(0xCAFE));
+        vm.expectRevert(FalconAccount.OnlyEntryPoint.selector);
+        account.validateUserOp(userOp, userOpHash, 0);
     }
 
-    <span class="kw">function</span> <span class="fn">_buildUserOp</span>(<span class="type">bytes</span> <span class="kw">memory</span> <span class="var">sig</span>) <span class="kw">internal</span> <span class="kw">view</span> <span class="kw">returns</span> (<span class="type">UserOperation</span> <span class="kw">memory</span>) {
-        <span class="kw">return</span> <span class="type">UserOperation</span>({
-            sender: <span class="builtin">address</span>(account),
-            nonce: <span class="num">0</span>,
-            callData: <span class="str">""</span>,
-            callGasLimit: <span class="num">100000</span>,
-            verificationGasLimit: <span class="num">5000000</span>,
-            preVerificationGas: <span class="num">50000</span>,
-            maxFeePerGas: <span class="num">1</span> <span class="kw">gwei</span>,
-            maxPriorityFeePerGas: <span class="num">1</span> <span class="kw">gwei</span>,
+    function test_Execute_AsOwner() public {
+        vm.prank(OWNER);
+        account.execute(address(0xCAFE), 1 ether, &quot;&quot;);
+        assertEq(address(0xCAFE).balance, 1 ether);
+    }
+
+    function test_Execute_AsEntryPoint() public {
+        account.execute(address(0xCAFE), 1 ether, &quot;&quot;);
+        assertEq(address(0xCAFE).balance, 1 ether);
+    }
+
+    function test_UpdatePublicKey_OnlyOwner() public {
+        vm.prank(OWNER);
+        account.updatePublicKey(hex&quot;AABBCCDD&quot;);
+
+        vm.prank(address(0xDEAD));
+        vm.expectRevert(FalconAccount.OnlyOwner.selector);
+        account.updatePublicKey(hex&quot;EEEE&quot;);
+    }
+
+    function test_PublicKeyStored() public view {
+        bytes memory stored = account.storedPubKeyPointer();
+        assertTrue(stored.length &gt; 0, &quot;Public key pointer should be stored&quot;);
+    }
+
+    function test_ValidatePaysFunds() public {
+        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 0);
+        bytes32 userOpHash = keccak256(&quot;pay-test&quot;);
+
+        uint256 balBefore = address(this).balance;
+        account.validateUserOp(userOp, userOpHash, 0.1 ether);
+        assertEq(address(this).balance - balBefore, 0.1 ether, &quot;Should pay missingAccountFunds&quot;);
+    }
+
+    function _buildUserOp(bytes memory sig, uint256 userNonce) internal view returns (UserOperation memory) {
+        return UserOperation({
+            sender: address(account),
+            nonce: userNonce,
+            callData: &quot;&quot;,
+            callGasLimit: 100000,
+            verificationGasLimit: 5000000,
+            preVerificationGas: 50000,
+            maxFeePerGas: 1 gwei,
+            maxPriorityFeePerGas: 1 gwei,
             signature: sig
         });
     }
 
-    <span class="kw">receive</span>() <span class="kw">external</span> <span class="kw">payable</span> {}
-}</code></pre>
+    receive() external payable {}
+}
+</code></pre>
     </div>
   </div>
 </div>
@@ -1724,16 +1925,15 @@ Compiler run successful!</code></pre>
   <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
   <pre><code>forge test --match-path "test/falcon/*" -vv</code></pre>
 </div>
-<p><strong>Expected output (6 tests, all PASS):</strong></p>
+<p><strong>Expected output (10 tests, all PASS):</strong></p>
 <div class="code-block-wrapper">
   <div class="code-block-header"><span class="code-block-lang">output</span></div>
-  <pre><code>[PASS] test_Execute()
+  <pre><code>[PASS] test_Execute_AsEntryPoint()
+[PASS] test_Execute_AsOwner()
 [PASS] test_PublicKeyStored()
-[PASS] test_UpdatePublicKey_OnlyOwner()
-[PASS] test_ValidatePaysFunds()
-[PASS] test_ValidateUserOp_InvalidSignature()
-[PASS] test_ValidateUserOp_ValidSignature()
-6 tests passed, 0 failed</code></pre>
+[PASS] test_ValidateUserOp_RejectsReplay()
+[PASS] test_ValidateUserOp_RevertsForNonEntryPoint()
+10 tests passed, 0 failed</code></pre>
 </div>
 
 <p><strong>What the tests prove:</strong></p>
@@ -1750,7 +1950,7 @@ Compiler run successful!</code></pre>
   These tests use a <code>MockFalconVerifier</code> to test the account contract logic independently of ZKNox's verification code. The mock returns success or failure on demand. To test with <strong>real Falcon-512 signatures</strong>, you need the ZKNox Python signer (<code>sign_cli.py</code>) to generate keypairs and signatures off-chain, then pass them to the real <code>ZKNOX_ethfalcon</code> contract. The ZKNox repo includes its own tests that do exactly this.
 </div>
 
-<h3>Step 2: Run all 23 tests together</h3>
+<h3>Step 2: Run all 33 tests together</h3>
 <div class="code-block-wrapper">
   <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
   <pre><code>forge test -vv</code></pre>
@@ -1758,15 +1958,15 @@ Compiler run successful!</code></pre>
 <p><strong>Expected output:</strong></p>
 <div class="code-block-wrapper">
   <div class="code-block-header"><span class="code-block-lang">output</span></div>
-  <pre><code>Ran 4 test suites: 23 tests passed, 0 failed, 0 skipped</code></pre>
+  <pre><code>Ran 4 test suites: 33 tests passed, 0 failed, 0 skipped</code></pre>
 </div>
 
 <h2 id="ch3-cp">Checkpoint</h2>
 <div class="checkpoint" data-cp="cp-falcon" onclick="toggleCheckpoint(this)">
   <div class="checkpoint-box"><span class="checkpoint-check">&#10003;</span></div>
   <div class="checkpoint-text">
-    <div class="checkpoint-label">Checkpoint &mdash; All 23 Tests Pass</div>
-    <div class="checkpoint-desc">Lamport (12 tests) + Falcon (6 tests) + Factory (5 tests) = 23 passed, 0 failed.</div>
+    <div class="checkpoint-label">Checkpoint &mdash; All 33 Tests Pass</div>
+    <div class="checkpoint-desc">Lamport (18 tests) + Falcon (10 tests) + Factory (5 tests) = 33 passed, 0 failed.</div>
   </div>
 </div>
 
@@ -1785,126 +1985,150 @@ Compiler run successful!</code></pre>
 
 <div class="code-block-wrapper">
   <div class="code-block-header">
-    <span class="code-block-file"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/factory/PQCAccountFactory.sol" target="_blank" rel="noopener">src/factory/PQCAccountFactory.sol</a></span>
+    <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/factory/PQCAccountFactory.sol" target="_blank" rel="noopener">src/factory/PQCAccountFactory.sol</a>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
   </div>
-  <pre><code><span class="cmt">// SPDX-License-Identifier: MIT</span>
-<span class="kw">pragma solidity</span> <span class="str">^0.8.25</span>;
+  <pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.34;
 
-<span class="kw">import</span> {<span class="type">LamportVerifier</span>} <span class="kw">from</span> <span class="str">"../lamport/LamportVerifier.sol"</span>;
-<span class="kw">import</span> {<span class="type">LamportAccount</span>} <span class="kw">from</span> <span class="str">"../lamport/LamportAccount.sol"</span>;
-<span class="kw">import</span> {<span class="type">FalconAccount</span>} <span class="kw">from</span> <span class="str">"../falcon/FalconAccount.sol"</span>;
+import {LamportVerifier} from &quot;../lamport/LamportVerifier.sol&quot;;
+import {LamportAccount} from &quot;../lamport/LamportAccount.sol&quot;;
+import {FalconAccount} from &quot;../falcon/FalconAccount.sol&quot;;
 
-<span class="cmt">/// @title PQCAccountFactory &mdash; Deploys quantum-resistant smart accounts</span>
-<span class="cmt">/// @notice CREATE2 factory for deterministic account addresses.</span>
-<span class="cmt">///         Supports both Lamport (hash-based) and Falcon (lattice-based) accounts.</span>
-<span class="kw">contract</span> <span class="type">PQCAccountFactory</span> {
-    <span class="type">LamportVerifier</span> <span class="kw">public</span> <span class="kw">immutable</span> <span class="var">lamportVerifier</span>;
-    <span class="type">address</span> <span class="kw">public</span> <span class="kw">immutable</span> <span class="var">falconVerifierAddress</span>;
+/// @title PQCAccountFactory — Deploys quantum-resistant smart accounts
+/// @notice CREATE2 factory for deterministic account addresses.
+///         Supports both Lamport (hash-based) and Falcon (lattice-based) accounts.
+contract PQCAccountFactory {
+    LamportVerifier public immutable lamportVerifier;
+    address public immutable falconVerifierAddress;
+    address public immutable entryPoint;
 
-    <span class="kw">event</span> <span class="ev">LamportAccountCreated</span>(<span class="type">address</span> <span class="kw">indexed</span> account, <span class="type">address</span> <span class="kw">indexed</span> owner);
-    <span class="kw">event</span> <span class="ev">FalconAccountCreated</span>(<span class="type">address</span> <span class="kw">indexed</span> account, <span class="type">address</span> <span class="kw">indexed</span> owner);
+    event LamportAccountCreated(address indexed account, address indexed owner);
+    event FalconAccountCreated(address indexed account, address indexed owner);
 
-    <span class="kw">constructor</span>(<span class="type">address</span> <span class="var">_lamportVerifier</span>, <span class="type">address</span> <span class="var">_falconVerifier</span>) {
-        lamportVerifier = <span class="type">LamportVerifier</span>(_lamportVerifier);
+    constructor(address _lamportVerifier, address _falconVerifier, address _entryPoint) {
+        lamportVerifier = LamportVerifier(_lamportVerifier);
         falconVerifierAddress = _falconVerifier;
+        entryPoint = _entryPoint;
     }
 
-    <span class="cmt">/// @notice Deploy a new Lamport smart account</span>
-    <span class="kw">function</span> <span class="fn">createLamportAccount</span>(
-        <span class="type">bytes32</span> <span class="var">pubKeyRoot</span>,
-        <span class="type">address</span> <span class="var">owner</span>,
-        <span class="type">uint256</span> <span class="var">salt</span>
-    ) <span class="kw">external</span> <span class="kw">returns</span> (<span class="type">LamportAccount</span> <span class="var">account</span>) {
-        account = <span class="kw">new</span> <span class="type">LamportAccount</span>{<span class="var">salt</span>: <span class="builtin">bytes32</span>(salt)}(
-            <span class="builtin">address</span>(lamportVerifier),
+    /// @notice Deploy a new Lamport smart account
+    /// @param pubKeyRoot Merkle root of the Lamport leaf roots registered on the account
+    /// @param owner The account owner (can rotate keys)
+    /// @param salt For deterministic CREATE2 address
+    function createLamportAccount(
+        bytes32 pubKeyRoot,
+        address owner,
+        uint256 salt
+    ) external returns (LamportAccount account) {
+        account = new LamportAccount{salt: bytes32(salt)}(
+            address(lamportVerifier),
             pubKeyRoot,
+            entryPoint,
             owner
         );
-        <span class="kw">emit</span> <span class="ev">LamportAccountCreated</span>(<span class="builtin">address</span>(account), owner);
+        emit LamportAccountCreated(address(account), owner);
     }
 
-    <span class="cmt">/// @notice Deploy a new Falcon-512 smart account</span>
-    <span class="kw">function</span> <span class="fn">createFalconAccount</span>(
-        <span class="type">bytes</span> <span class="kw">memory</span> <span class="var">publicKey</span>,
-        <span class="type">address</span> <span class="var">owner</span>,
-        <span class="type">uint256</span> <span class="var">salt</span>
-    ) <span class="kw">external</span> <span class="kw">returns</span> (<span class="type">FalconAccount</span> <span class="var">account</span>) {
-        account = <span class="kw">new</span> <span class="type">FalconAccount</span>{<span class="var">salt</span>: <span class="builtin">bytes32</span>(salt)}(
+    /// @notice Deploy a new Falcon-512 smart account
+    /// @param publicKey The Falcon-512 public key (NTT domain, ~897 bytes)
+    /// @param owner The account owner
+    /// @param salt For deterministic CREATE2 address
+    function createFalconAccount(
+        bytes memory publicKey,
+        address owner,
+        uint256 salt
+    ) external returns (FalconAccount account) {
+        account = new FalconAccount{salt: bytes32(salt)}(
             falconVerifierAddress,
             publicKey,
+            entryPoint,
             owner
         );
-        <span class="kw">emit</span> <span class="ev">FalconAccountCreated</span>(<span class="builtin">address</span>(account), owner);
+        emit FalconAccountCreated(address(account), owner);
     }
 
-    <span class="cmt">/// @notice Compute the deterministic address of a Lamport account</span>
-    <span class="kw">function</span> <span class="fn">getLamportAccountAddress</span>(
-        <span class="type">bytes32</span> <span class="var">pubKeyRoot</span>,
-        <span class="type">address</span> <span class="var">owner</span>,
-        <span class="type">uint256</span> <span class="var">salt</span>
-    ) <span class="kw">external</span> <span class="kw">view</span> <span class="kw">returns</span> (<span class="type">address</span>) {
-        <span class="type">bytes32</span> <span class="var">hash</span> = <span class="builtin">keccak256</span>(
-            <span class="builtin">abi.encodePacked</span>(
-                <span class="builtin">bytes1</span>(<span class="num">0xff</span>),
-                <span class="builtin">address</span>(<span class="kw">this</span>),
-                <span class="builtin">bytes32</span>(salt),
-                <span class="builtin">keccak256</span>(
-                    <span class="builtin">abi.encodePacked</span>(
-                        <span class="kw">type</span>(<span class="type">LamportAccount</span>).creationCode,
-                        <span class="builtin">abi.encode</span>(<span class="builtin">address</span>(lamportVerifier), pubKeyRoot, owner)
+    /// @notice Compute the deterministic address of a Lamport account
+    function getLamportAccountAddress(
+        bytes32 pubKeyRoot,
+        address owner,
+        uint256 salt
+    ) external view returns (address) {
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                bytes1(0xff),
+                address(this),
+                bytes32(salt),
+                keccak256(
+                    abi.encodePacked(
+                        type(LamportAccount).creationCode,
+                        abi.encode(address(lamportVerifier), pubKeyRoot, entryPoint, owner)
                     )
                 )
             )
         );
-        <span class="kw">return</span> <span class="type">address</span>(<span class="builtin">uint160</span>(<span class="builtin">uint256</span>(hash)));
+        return address(uint160(uint256(hash)));
     }
-}</code></pre>
+}
+</code></pre>
 </div>
 
 <h2 id="ch4-script">DeployFactory.s.sol</h2>
 
 <div class="code-block-wrapper">
   <div class="code-block-header">
-    <span class="code-block-file"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/script/DeployFactory.s.sol" target="_blank" rel="noopener">script/DeployFactory.s.sol</a></span>
+    <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/script/DeployFactory.s.sol" target="_blank" rel="noopener">script/DeployFactory.s.sol</a>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
   </div>
-  <pre><code><span class="cmt">// SPDX-License-Identifier: MIT</span>
-<span class="kw">pragma solidity</span> <span class="str">^0.8.25</span>;
+  <pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.34;
 
-<span class="kw">import</span> <span class="str">"forge-std/Script.sol"</span>;
-<span class="kw">import</span> <span class="str">"../src/lamport/LamportVerifier.sol"</span>;
-<span class="kw">import</span> <span class="str">"../src/factory/PQCAccountFactory.sol"</span>;
+import &quot;forge-std/Script.sol&quot;;
+import &quot;../src/lamport/LamportVerifier.sol&quot;;
+import &quot;../src/factory/PQCAccountFactory.sol&quot;;
 
-<span class="cmt">/// @notice Deploy the full PQC account stack to Base Sepolia</span>
-<span class="cmt">/// @dev Run: forge script script/DeployFactory.s.sol --rpc-url base_sepolia --broadcast</span>
-<span class="kw">contract</span> <span class="type">DeployFactory</span> <span class="kw">is</span> <span class="type">Script</span> {
-    <span class="kw">function</span> <span class="fn">run</span>() <span class="kw">external</span> {
-        <span class="type">uint256</span> <span class="var">deployerPrivateKey</span> = <span class="builtin">vm.envUint</span>(<span class="str">"PRIVATE_KEY"</span>);
-        <span class="builtin">vm.startBroadcast</span>(deployerPrivateKey);
+/// @notice Deploy the full PQC account stack to Base Sepolia
+/// @dev Run: forge script script/DeployFactory.s.sol --rpc-url base_sepolia --broadcast
+///
+/// Prerequisites:
+///   - Set PRIVATE_KEY env var
+///   - Set BASE_SEPOLIA_RPC_URL in .env
+///   - Set FALCON_VERIFIER_ADDRESS env var (address of deployed ETHFALCON verifier)
+///     If not set, deploys without Falcon support (Lamport only)
+contract DeployFactory is Script {
+    address internal constant DEFAULT_ENTRY_POINT = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
 
-        <span class="cmt">// 1. Deploy Lamport Verifier</span>
-        <span class="type">LamportVerifier</span> <span class="var">lamportVerifier</span> = <span class="kw">new</span> <span class="type">LamportVerifier</span>();
-        <span class="builtin">console.log</span>(<span class="str">"LamportVerifier:"</span>, <span class="builtin">address</span>(lamportVerifier));
+    function run() external {
+        uint256 deployerPrivateKey = vm.envUint(&quot;PRIVATE_KEY&quot;);
+        vm.startBroadcast(deployerPrivateKey);
 
-        <span class="cmt">// 2. Get or skip Falcon verifier address</span>
-        <span class="type">address</span> <span class="var">falconVerifier</span> = <span class="builtin">vm.envOr</span>(<span class="str">"FALCON_VERIFIER_ADDRESS"</span>, <span class="type">address</span>(<span class="num">0</span>));
-        <span class="kw">if</span> (falconVerifier == <span class="type">address</span>(<span class="num">0</span>)) {
-            <span class="builtin">console.log</span>(<span class="str">"No FALCON_VERIFIER_ADDRESS set - deploying Lamport-only factory"</span>);
-        } <span class="kw">else</span> {
-            <span class="builtin">console.log</span>(<span class="str">"FalconVerifier:"</span>, falconVerifier);
+        // 1. Deploy Lamport Verifier
+        LamportVerifier lamportVerifier = new LamportVerifier();
+        console.log(&quot;LamportVerifier:&quot;, address(lamportVerifier));
+
+        // 2. Get or skip Falcon verifier address
+        address falconVerifier = vm.envOr(&quot;FALCON_VERIFIER_ADDRESS&quot;, address(0));
+        if (falconVerifier == address(0)) {
+            console.log(&quot;No FALCON_VERIFIER_ADDRESS set - deploying Lamport-only factory&quot;);
+        } else {
+            console.log(&quot;FalconVerifier:&quot;, falconVerifier);
         }
 
-        <span class="cmt">// 3. Deploy Factory</span>
-        <span class="type">PQCAccountFactory</span> <span class="var">factory</span> = <span class="kw">new</span> <span class="type">PQCAccountFactory</span>(
-            <span class="builtin">address</span>(lamportVerifier),
-            falconVerifier
-        );
-        <span class="builtin">console.log</span>(<span class="str">"PQCAccountFactory:"</span>, <span class="builtin">address</span>(factory));
+        address entryPoint = vm.envOr(&quot;ENTRY_POINT_ADDRESS&quot;, DEFAULT_ENTRY_POINT);
+        console.log(&quot;EntryPoint:&quot;, entryPoint);
 
-        <span class="builtin">vm.stopBroadcast</span>();
+        // 3. Deploy Factory
+        PQCAccountFactory factory = new PQCAccountFactory(
+            address(lamportVerifier),
+            falconVerifier,
+            entryPoint
+        );
+        console.log(&quot;PQCAccountFactory:&quot;, address(factory));
+
+        vm.stopBroadcast();
     }
-}</code></pre>
+}
+</code></pre>
 </div>
 
 <h2 id="ch4-deploy">Step by Step: Deploy to Base Sepolia</h2>
@@ -1939,6 +2163,7 @@ export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org</code></pre>
 == Logs ==
   LamportVerifier: 0x...
   No FALCON_VERIFIER_ADDRESS set - deploying Lamport-only factory
+  EntryPoint: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
   PQCAccountFactory: 0x...</code></pre>
 </div>
 
@@ -1952,7 +2177,7 @@ export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org</code></pre>
 <p><strong>What gets deployed (2 contracts):</strong></p>
 <ol>
   <li><strong>LamportVerifier</strong> &mdash; The pure keccak256 signature verification library. Stateless, called by LamportAccount.</li>
-  <li><strong>PQCAccountFactory</strong> &mdash; The CREATE2 factory. Takes the LamportVerifier address as constructor arg. Can deploy new LamportAccount or FalconAccount instances.</li>
+  <li><strong>PQCAccountFactory</strong> &mdash; The CREATE2 factory. Takes the LamportVerifier, Falcon verifier, and EntryPoint addresses as constructor arguments and deploys LamportAccount or FalconAccount instances.</li>
 </ol>
 <p>Save the contract addresses from the output &mdash; you'll need them to create accounts.</p>
 
@@ -1999,29 +2224,29 @@ forge script script/DeployFactory.s.sol \
 
 <h2 id="ch5-precompile">Path to 3,000 Gas: The Falcon Precompile</h2>
 
-<p>Everything we built in this tutorial is a stopgap. The real game-changer is <strong>EIP-8052</strong>: a native Falcon-512 precompile at the protocol level. When this ships, verification drops from ~1.5M gas to approximately <strong>3,000 gas</strong> &mdash; the same as ECDSA today.</p>
+<p>Everything we built in this tutorial is user-space infrastructure for today's EVM. The execution-layer roadmap points toward lower-cost native PQ signature verification support, which could collapse verification costs relative to the current pure-Solidity and ETHFALCON paths.</p>
 
-<p>Our FalconAccount contract is designed to be forwards-compatible. When EIP-8052 lands:</p>
+<p>The integration boundary in this repo is already the right one:</p>
 <ol>
-  <li>Deploy a new <code>ISigVerifier</code> adapter that calls the precompile address</li>
-  <li>Factory deploys new accounts pointing to the precompile adapter</li>
-  <li>Existing accounts can upgrade their verifier (if implemented as upgradeable)</li>
+  <li>The account calls into an external verifier interface</li>
+  <li>The factory chooses which verifier new accounts are wired to</li>
+  <li>A future native verifier can slot in behind that interface without changing the off-chain key material</li>
 </ol>
 
-<p>No changes to the account logic, the signature format, or the key material. The only difference is the verification cost collapses by 500x.</p>
+<p>The exact precompile shape and shipping timeline are still in flux, but the account-abstraction boundary stays useful either way.</p>
 
 <h2 id="ch5-hybrid">Hybrid ECDSA + Falcon During Transition</h2>
 
-<p>The migration to post-quantum won't happen overnight. During the transition period, a <strong>hybrid signature scheme</strong> offers the best of both worlds:</p>
+<p>The migration to post-quantum security will be gradual. During that transition, a <strong>hybrid signature scheme</strong> is a common strategy:</p>
 
 <ul>
-  <li><strong>Require both</strong> an ECDSA signature and a Falcon signature in <code>validateUserOp</code></li>
-  <li>If quantum computers never materialize at scale, you lose nothing &mdash; you still have ECDSA security</li>
-  <li>If they do, the Falcon signature protects you even if ECDSA is broken</li>
-  <li>Gas cost: ~1.5M + 3K = ~1.5M (the Falcon verification dominates)</li>
+  <li>Require both an ECDSA signature and a Falcon signature in <code>validateUserOp</code></li>
+  <li>Keep compatibility with today's wallets and operational flows</li>
+  <li>Gain post-quantum protection once the heavier signature path is in place</li>
+  <li>Pay the gas cost of the heavier verifier until native support improves the economics</li>
 </ul>
 
-<p>This is the approach recommended by NIST for the transition period: don't replace, layer.</p>
+<p>The trade-off is straightforward: better cryptographic agility now, higher verification cost until the protocol offers cheaper native support.</p>
 
 <h2 id="ch5-naysayer">Naysayer Optimistic Verification</h2>
 
@@ -2039,7 +2264,7 @@ forge script script/DeployFactory.s.sol \
 
 <h2 id="ch5-eip7702">EIP-7702 Delegation for Existing EOAs</h2>
 
-<p>What about the billions of dollars locked in existing Externally Owned Accounts? <strong>EIP-7702</strong> (live on mainnet since the Pectra upgrade) allows an EOA to delegate its validation logic to a smart contract for a single transaction.</p>
+<p>What about the billions of dollars locked in existing Externally Owned Accounts? <strong>EIP-7702</strong> introduces a delegation path that lets an EOA point transaction validation at smart-account logic for a transaction.</p>
 
 <p>This means an existing EOA can:</p>
 <ol>
@@ -2050,19 +2275,19 @@ forge script script/DeployFactory.s.sol \
 
 <p>No need to migrate funds. No new address. Just attach quantum-resistant signing to your existing account.</p>
 
-<h2 id="ch5-timeline">The Ethereum Foundation Strawmap Timeline</h2>
+<h2 id="ch5-timeline">The Ethereum Foundation PQ Roadmap</h2>
 
 <div class="table-wrapper">
 <table>
 <thead>
-<tr><th>Year</th><th>Phase</th><th>Target</th></tr>
+<tr><th>Milestone</th><th>Layer</th><th>Direction</th></tr>
 </thead>
 <tbody>
-<tr><td><strong>2026</strong></td><td>Precompiles</td><td>EIP-8051 (Dilithium) + EIP-8052 (Falcon) precompiles</td></tr>
-<tr><td><strong>2027</strong></td><td>Consensus</td><td>Replace BLS signatures in beacon chain</td></tr>
-<tr><td><strong>2028</strong></td><td>Data Availability</td><td>Migrate KZG commitments to PQ-safe scheme</td></tr>
-<tr><td><strong>2029</strong></td><td>ZK Proofs</td><td>Replace Groth16 with PQ-safe proving system</td></tr>
-<tr><td><strong>2030</strong></td><td>Complete</td><td>Full post-quantum resistance across all layers</td></tr>
+<tr><td><strong>I*</strong></td><td>Consensus</td><td>PQ key registry</td></tr>
+<tr><td><strong>J*</strong></td><td>Execution</td><td>PQ signature precompiles / native verification support</td></tr>
+<tr><td><strong>L*</strong></td><td>Consensus + Data</td><td>PQ attestations, real-time CL proofs, leanVM</td></tr>
+<tr><td><strong>M*</strong></td><td>Execution + Data</td><td>PQ signature aggregation, PQ blobs</td></tr>
+<tr><td><strong>Longer term</strong></td><td>All layers</td><td>Full PQ consensus, PQ transactions, PQ sampling</td></tr>
 </tbody>
 </table>
 </div>
@@ -2075,8 +2300,9 @@ forge script script/DeployFactory.s.sol \
   <li><a href="https://github.com/pse-team/poqeth" target="_blank" rel="noopener"><strong>poqeth</strong></a> &mdash; Naysayer optimistic PQC verification</li>
   <li><a href="https://eips.ethereum.org/EIPS/eip-4337" target="_blank" rel="noopener"><strong>ERC-4337</strong></a> &mdash; Account Abstraction specification</li>
   <li><a href="https://eips.ethereum.org/EIPS/eip-7702" target="_blank" rel="noopener"><strong>EIP-7702</strong></a> &mdash; EOA delegation for smart account migration</li>
-  <li><a href="https://csrc.nist.gov/pubs/fips/206/final" target="_blank" rel="noopener"><strong>NIST FIPS 206</strong></a> &mdash; Falcon signature standard</li>
-  <li><a href="https://csrc.nist.gov/pubs/fips/204/final" target="_blank" rel="noopener"><strong>NIST FIPS 204</strong></a> &mdash; Dilithium signature standard</li>
+  <li><a href="https://csrc.nist.gov/Projects/Post-Quantum-Cryptography" target="_blank" rel="noopener"><strong>NIST PQC project</strong></a> &mdash; current status of published standards and ongoing Falcon standardization</li>
+  <li><a href="https://csrc.nist.gov/pubs/fips/205/final" target="_blank" rel="noopener"><strong>NIST FIPS 205</strong></a> &mdash; SLH-DSA / SPHINCS+</li>
+  <li><a href="https://csrc.nist.gov/pubs/fips/204/final" target="_blank" rel="noopener"><strong>NIST FIPS 204</strong></a> &mdash; ML-DSA / Dilithium</li>
 </ul>
 
 <div class="callout callout-info">

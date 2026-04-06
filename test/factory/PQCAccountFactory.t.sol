@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.34;
 
 import "forge-std/Test.sol";
 import "../../src/factory/PQCAccountFactory.sol";
@@ -8,7 +8,6 @@ import "../../src/lamport/LamportAccount.sol";
 import "../../src/falcon/FalconAccount.sol";
 import {ISigVerifier} from "InterfaceVerifier/IVerifier.sol";
 
-/// @notice Minimal mock for factory tests
 contract MockVerifier is ISigVerifier {
     function setKey(bytes calldata) external pure returns (bytes memory) {
         return abi.encodePacked(address(0x1234));
@@ -24,12 +23,13 @@ contract PQCAccountFactoryTest is Test {
     LamportVerifier public lamportVerifier;
     MockVerifier public falconVerifier;
 
-    address constant OWNER = address(0xBEEF);
+    address internal constant ENTRY_POINT = address(0x4337);
+    address internal constant OWNER = address(0xBEEF);
 
     function setUp() public {
         lamportVerifier = new LamportVerifier();
         falconVerifier = new MockVerifier();
-        factory = new PQCAccountFactory(address(lamportVerifier), address(falconVerifier));
+        factory = new PQCAccountFactory(address(lamportVerifier), address(falconVerifier), ENTRY_POINT);
     }
 
     function test_CreateLamportAccount() public {
@@ -40,6 +40,7 @@ contract PQCAccountFactoryTest is Test {
         assertTrue(address(account) != address(0), "Account should be deployed");
         assertEq(account.owner(), OWNER, "Owner should match");
         assertEq(account.publicKeyRoot(), root, "Public key root should match");
+        assertEq(account.entryPoint(), ENTRY_POINT, "EntryPoint should match");
     }
 
     function test_CreateFalconAccount() public {
@@ -49,6 +50,7 @@ contract PQCAccountFactoryTest is Test {
 
         assertTrue(address(account) != address(0), "Account should be deployed");
         assertEq(account.owner(), OWNER, "Owner should match");
+        assertEq(account.entryPoint(), ENTRY_POINT, "EntryPoint should match");
     }
 
     function test_DeterministicAddress() public {

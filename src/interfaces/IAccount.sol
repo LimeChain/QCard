@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.34;
 
 /// @title Minimal ERC-4337 Account Interface
 /// @notice Simplified for the PoC — production would use the full EntryPoint interface

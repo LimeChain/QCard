@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.34;
 
 import "forge-std/Script.sol";
 import "../src/lamport/LamportVerifier.sol";
@@ -10,9 +10,12 @@ import "../src/factory/PQCAccountFactory.sol";
 ///   forge script script/VerifyDeployment.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL -vvvv
 ///   Env: VERIFIER_ADDRESS, FACTORY_ADDRESS (required), PRIVATE_KEY (optional, for account creation)
 contract VerifyDeployment is Script {
+    address internal constant DEFAULT_ENTRY_POINT = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
+
     function run() external {
         address verifierAddr = vm.envAddress("VERIFIER_ADDRESS");
         address factoryAddr = vm.envAddress("FACTORY_ADDRESS");
+        address expectedEntryPoint = vm.envOr("ENTRY_POINT_ADDRESS", DEFAULT_ENTRY_POINT);
 
         console.log("=== Post-Deployment Verification ===");
         console.log("LamportVerifier:", verifierAddr);
@@ -22,6 +25,7 @@ contract VerifyDeployment is Script {
         _checkCode(factoryAddr, "PQCAccountFactory");
 
         _checkFactoryRef(factoryAddr, verifierAddr);
+        _checkEntryPoint(factoryAddr, expectedEntryPoint);
         _checkVerify(verifierAddr);
 
         console.log("=== All checks passed ===");
@@ -39,6 +43,12 @@ contract VerifyDeployment is Script {
         address stored = address(factory.lamportVerifier());
         require(stored == verifierAddr, "Factory points to wrong verifier");
         console.log("PASS: Factory references correct LamportVerifier");
+    }
+
+    function _checkEntryPoint(address factoryAddr, address expectedEntryPoint) internal view {
+        PQCAccountFactory factory = PQCAccountFactory(factoryAddr);
+        require(factory.entryPoint() == expectedEntryPoint, "Factory points to wrong EntryPoint");
+        console.log("PASS: Factory references correct EntryPoint");
     }
 
     function _checkVerify(address verifierAddr) internal view {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.34;
 
 import {IAccount, UserOperation} from "../interfaces/IAccount.sol";
 import {ISigVerifier} from "InterfaceVerifier/IVerifier.sol";
@@ -15,6 +15,7 @@ import {ISigVerifier} from "InterfaceVerifier/IVerifier.sol";
 ///   - Gas cost: ~1.5M per verification (vs 3,000 for ECDSA)
 contract FalconAccount is IAccount {
     ISigVerifier public immutable falconVerifier;
+    address public immutable entryPoint;
     address public owner;
     uint256 public nonce;
 
@@ -29,6 +30,7 @@ contract FalconAccount is IAccount {
     event Executed(address indexed target, uint256 value, bytes data);
     event PublicKeyUpdated();
 
+    error OnlyEntryPoint();
     error OnlyOwner();
     error ExecutionFailed();
     error PublicKeyNotSet();
@@ -41,8 +43,9 @@ contract FalconAccount is IAccount {
     // ISigVerifier.verify.selector = bytes4(keccak256("verify(bytes,bytes32,bytes)"))
     bytes4 internal constant VERIFY_SUCCESS = 0x024ad318;
 
-    constructor(address _falconVerifier, bytes memory _publicKey, address _owner) {
+    constructor(address _falconVerifier, bytes memory _publicKey, address _entryPoint, address _owner) {
         falconVerifier = ISigVerifier(_falconVerifier);
+        entryPoint = _entryPoint;
         owner = _owner;
 
         // Store the public key via ETHFALCON's setKey (uses SSTORE2)
@@ -60,26 +63,26 @@ contract FalconAccount is IAccount {
         bytes32 userOpHash,
         uint256 missingAccountFunds
     ) external override returns (uint256 validationData) {
+        if (msg.sender != entryPoint) revert OnlyEntryPoint();
         if (storedPubKeyPointer.length == 0) revert PublicKeyNotSet();
+        if (userOp.sender != address(this) || userOp.nonce != nonce) {
+            return SIG_VALIDATION_FAILED;
+        }
 
-        // Call ETHFALCON's ISigVerifier.verify(pubkey, hash, signature)
-        // pubkey here is the SSTORE2 pointer (20 bytes address encoded)
         bytes4 result = falconVerifier.verify(
             storedPubKeyPointer,
             userOpHash,
             userOp.signature
         );
 
-        // ISigVerifier returns verify.selector (0x024ad318) on success
         if (result != VERIFY_SUCCESS) {
             return SIG_VALIDATION_FAILED;
         }
 
         nonce++;
 
-        // Pay the EntryPoint if needed
         if (missingAccountFunds > 0) {
-            (bool success,) = payable(msg.sender).call{value: missingAccountFunds}("");
+            (bool success,) = payable(entryPoint).call{value: missingAccountFunds}("");
             (success);
         }
 
@@ -88,9 +91,9 @@ contract FalconAccount is IAccount {
 
     error OnlyEntryPointOrOwner();
 
-    /// @notice Execute a call from this account (only owner or self after validation)
+    /// @notice Execute a call from this account (only owner or EntryPoint after validation)
     function execute(address target, uint256 value, bytes calldata data) external {
-        if (msg.sender != owner && msg.sender != address(this)) revert OnlyEntryPointOrOwner();
+        if (msg.sender != owner && msg.sender != entryPoint) revert OnlyEntryPointOrOwner();
         (bool success,) = target.call{value: value}(data);
         if (!success) revert ExecutionFailed();
         emit Executed(target, value, data);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.34;
 
 /// @title LamportVerifier — Quantum-resistant signature verification using only keccak256
 /// @notice Lamport one-time signatures: the simplest post-quantum scheme.
@@ -41,26 +41,28 @@ contract LamportVerifier {
         return true;
     }
 
-    /// @notice Verify using a compact Merkle root instead of the full 512-hash public key
-    /// @dev The full public key hashes are provided in calldata; the stored root is checked via Merkle proof
+    /// @notice Verify using an account-level Merkle root instead of the full 512-hash public key
+    /// @dev The Lamport public key hashes are first compressed into a leaf root, then checked against the account root
     /// @param msgHash Message hash to verify
-    /// @param pubKeyRoot Merkle root of the 512 public key hashes
+    /// @param accountRoot Merkle root of all Lamport leaf roots registered on the account
     /// @param pubKeyHashes Full 512 public key hashes (verified against root)
     /// @param signature The 256 revealed preimages
+    /// @param leafIndex Index of the Lamport leaf within the account-level Merkle tree
+    /// @param merkleProof Sibling hashes proving the Lamport leaf against `accountRoot`
     /// @return valid True if both the Merkle root matches and the signature is valid
     function verifyWithRoot(
         bytes32 msgHash,
-        bytes32 pubKeyRoot,
+        bytes32 accountRoot,
         bytes32[512] calldata pubKeyHashes,
-        bytes32[256] calldata signature
+        bytes32[256] calldata signature,
+        uint256 leafIndex,
+        bytes32[] calldata merkleProof
     ) external pure returns (bool valid) {
-        // Verify the public key hashes match the stored root
-        bytes32 computedRoot = _computeMerkleRoot(pubKeyHashes);
-        if (computedRoot != pubKeyRoot) {
+        bytes32 lamportRoot = _computeMerkleRoot(pubKeyHashes);
+        if (!_verifyProof(lamportRoot, leafIndex, merkleProof, accountRoot)) {
             return false;
         }
 
-        // Then verify the signature against those hashes
         for (uint256 i = 0; i < 256; i++) {
             uint256 bit = (uint256(msgHash) >> (255 - i)) & 1;
             bytes32 computed = keccak256(abi.encodePacked(signature[i]));
@@ -72,7 +74,7 @@ contract LamportVerifier {
         return true;
     }
 
-    /// @notice Compute the Merkle root of 512 leaf hashes
+    /// @notice Compute the Merkle root of the 512 Lamport public key hashes
     function _computeMerkleRoot(bytes32[512] calldata leaves) internal pure returns (bytes32) {
         bytes32[512] memory layer;
         for (uint256 i = 0; i < 512; i++) {
@@ -87,5 +89,27 @@ contract LamportVerifier {
             n /= 2;
         }
         return layer[0];
+    }
+
+    function _verifyProof(
+        bytes32 leaf,
+        uint256 leafIndex,
+        bytes32[] calldata merkleProof,
+        bytes32 expectedRoot
+    ) internal pure returns (bool) {
+        bytes32 computed = leaf;
+        uint256 idx = leafIndex;
+
+        for (uint256 i = 0; i < merkleProof.length; i++) {
+            bytes32 sibling = merkleProof[i];
+            if ((idx & 1) == 0) {
+                computed = keccak256(abi.encodePacked(computed, sibling));
+            } else {
+                computed = keccak256(abi.encodePacked(sibling, computed));
+            }
+            idx >>= 1;
+        }
+
+        return computed == expectedRoot;
     }
 }
