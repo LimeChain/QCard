@@ -1,10 +1,12 @@
 # Building Quantum-Resistant Ethereum
 
-Start with the book: [`book.html`](book.html)
+Read the book: [**astral-desert-9vw7.here.now**](https://astral-desert-9vw7.here.now/) &nbsp;|&nbsp; Local: `open book.html`
 
-- Local: `open book.html`
-- The repo root is the tutorial project. Do not `cd book/`.
-- If you need a public preview for this private repo, publish `book.html` to a static host.
+Republish after edits:
+
+```bash
+./scripts/publish-book.sh
+```
 
 ## Quickstart
 
@@ -83,6 +85,7 @@ Encode `userOp.signature` as:
 - [`script/DeployFactory.s.sol`](script/DeployFactory.s.sol): deploy verifier + factory
 - [`script/VerifyDeployment.s.sol`](script/VerifyDeployment.s.sol): deployment checks
 - [`signer/lamport_signer.py`](signer/lamport_signer.py): off-chain Lamport signer
+- [`scripts/publish-book.sh`](scripts/publish-book.sh): republish book.html to here.now
 
 ## License
 
