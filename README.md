@@ -1,6 +1,6 @@
 # Building Quantum-Resistant Ethereum
 
-Read the book: [**astral-desert-9vw7.here.now**](https://astral-desert-9vw7.here.now/) &nbsp;|&nbsp; Local: `open book.html`
+Read the book: [**nutmeg-salmon-87sn.here.now**](https://nutmeg-salmon-87sn.here.now/) &nbsp;|&nbsp; Local: `open book.html`
 
 Republish after edits:
 
