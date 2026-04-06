@@ -1,10 +1,14 @@
 # Building Quantum-Resistant Ethereum: A Hands-On Guide
 
-A step-by-step tutorial with working code for post-quantum signature verification on EVM using account abstraction.
+Read the book first.
+
+- Online: https://htmlpreview.github.io/?https://raw.githubusercontent.com/LimeChain/pqc-evm-tutorial/main/book.html
+- Local: `open book.html`
+- Source of truth: the repo root is the tutorial project; the book's code blocks point back to files in this repo.
 
 ## Prerequisites
 
-- [Foundry](https://getfoundry.sh/) (forge, cast, anvil)
+- [Foundry](https://getfoundry.sh/) (`forge`, `cast`, `anvil`)
 - Python 3.10+
 - Git
 
@@ -15,137 +19,141 @@ foundryup
 
 ## Setup
 
+The repo itself is the book. Do not `cd book/`.
+
 ```bash
-cd book/
+git submodule update --init --recursive
 
-# Install git submodules (ETHFALCON, forge-std, sstore2)
-forge install
+python3 -m venv .venv
+source .venv/bin/activate
+pip install pycryptodome
 
-# Compile
 forge build
 ```
 
-If `forge install` fails, install manually:
-
-```bash
-forge install foundry-rs/forge-std
-forge install ZKNoxHQ/ETHFALCON
-forge install 0xsequence/sstore2
-```
+The project is pinned to Solidity `0.8.34` in `foundry.toml`.
 
 ## Run Tests
 
 ```bash
-forge test -vv   # All 23 tests
+forge test -vv
 ```
 
-Expected:
-```
-Lamport verify gas: 231,706
-LamportAccount validateUserOp gas: 747,316
-23 tests passed, 0 failed
+Current output highlights:
+
+```text
+Lamport verify gas: 231705
+LamportAccount validateUserOp gas: 753940
+33 tests passed, 0 failed
 ```
 
 Per chapter:
+
 ```bash
-forge test --match-path "test/lamport/*" -vv   # Chapter 2: 12 tests
-forge test --match-path "test/falcon/*" -vv    # Chapter 3: 6 tests
+forge test --match-path "test/lamport/*" -vv   # Chapter 2: 18 tests
+forge test --match-path "test/falcon/*" -vv    # Chapter 3: 10 tests
 forge test --match-path "test/factory/*" -vv   # Chapter 4: 5 tests
 ```
 
 ## Deploy to Base Sepolia
 
 ```bash
-# 1. Set env vars
 export PRIVATE_KEY=0xYOUR_PRIVATE_KEY
 export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
+export FALCON_VERIFIER_ADDRESS=0x...      # optional, for Falcon account support
+export ENTRY_POINT_ADDRESS=0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789  # optional override
 
-# 2. Deploy (LamportVerifier + PQCAccountFactory)
 forge script script/DeployFactory.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast
 ```
 
-Get test ETH: [base.org/faucet](https://www.base.org/faucet) or [Alchemy faucet](https://www.alchemy.com/faucets/base-sepolia).
+Get test ETH from [Base](https://www.base.org/faucet) or an [Alchemy faucet](https://www.alchemy.com/faucets/base-sepolia).
 
 ## Verify Deployment
 
-After deploying, verify contracts work on-chain:
-
 ```bash
-export VERIFIER_ADDRESS=0x...   # from deploy output
-export FACTORY_ADDRESS=0x...    # from deploy output
+export VERIFIER_ADDRESS=0x...
+export FACTORY_ADDRESS=0x...
+export ENTRY_POINT_ADDRESS=0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789  # optional override
 
 forge script script/VerifyDeployment.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL -vvvv
 ```
 
-Expected:
-```
+Expected checks:
+
+```text
 PASS: LamportVerifier deployed
 PASS: PQCAccountFactory deployed
 PASS: Factory references correct LamportVerifier
+PASS: Factory references correct EntryPoint
 PASS: Lamport signature verified on-chain
-Verification gas: ~231,706
 ```
 
-## How Signing Works (The Full Flow)
+## How Signing Works
 
-PQC signing happens **off-chain**. MetaMask cannot sign Lamport/Falcon signatures — it only does ECDSA. The architecture:
+PQC signing happens off-chain. MetaMask cannot sign Lamport or Falcon signatures for these accounts; it can only fund them like any other address.
 
-```
-Python CLI signer               Bundler (Pimlico)          On-chain
-  |                                |                          |
-  |-- 1. Generate PQC keypair     |                          |
-  |-- 2. Deploy account (factory) |                          |
-  |-- 3. Construct UserOperation  |                          |
-  |-- 4. Sign userOpHash with     |                          |
-  |       Lamport/Falcon key      |                          |
-  |-- 5. Submit UserOp ---------->|-- 6. Simulate ---------> |
-  |                                |-- 7. Bundle & send ----> |-- 8. validateUserOp()
-  |                                |                          |       (PQC verification)
-  |                                |                          |-- 9. execute()
-```
+Lamport signing uses an account-level Merkle tree of one-time Lamport keys:
 
-**MetaMask can**: Send ETH TO your PQC account (it's just a regular address). View it on BaseScan.
+1. Derive a master seed from your secret.
+2. Derive many Lamport leaves from that seed.
+3. Compute the account root from the leaf roots.
+4. Deploy the account with that root.
+5. Sign a `userOpHash` with exactly one Lamport leaf.
+6. Include the leaf's public key hashes, the Lamport signature, the leaf index, and the Merkle proof in `userOp.signature`.
 
-**MetaMask cannot**: Sign transactions FROM your PQC account. You need the Python signer for that.
+## Lamport Signer
 
-### Generate a Lamport keypair
+Generate an account tree summary:
 
 ```bash
-python3 signer/lamport_signer.py genkeys --seed "my-secret-seed"
+python3 signer/lamport_signer.py genkeys --seed "my-secret-seed" --leaf-count 16
 ```
 
-Output:
-```
-Generated Lamport keypair from seed: my-secret-seed
-  Private key: 512 values (16384 bytes)
-  Public key:  512 hashes (16384 bytes)
-  Merkle root: 0xf1db...
+Example output:
+
+```text
+Generated Lamport account from seed: my-secret-seed
+  Leaf count:  16
+  Per leaf:    512 private values / 512 public key hashes
+  Signature:   256 revealed preimages (8192 bytes)
+  Account root: 0x...
+  First leaf:   0x...
 ```
 
-### Get the Merkle root (for account creation)
+Compute the account root for `createLamportAccount(...)`:
 
 ```bash
-python3 signer/lamport_signer.py pubroot --seed "my-secret-seed"
-# Output: 0xf1db...  <-- pass this to factory.createLamportAccount()
+python3 signer/lamport_signer.py pubroot --seed "my-secret-seed" --leaf-count 16
 ```
 
-### Sign a message hash
+Sign a `userOpHash` with a specific Lamport leaf:
 
 ```bash
 python3 signer/lamport_signer.py sign \
   --seed "my-secret-seed" \
+  --leaf-count 16 \
+  --leaf-index 0 \
   --message "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
 ```
 
-Output: JSON with `public_key_hashes` (512 items) and `signature` (256 items) — this goes into `userOp.signature`.
+The signer returns JSON with:
 
-### Create an account via cast
+- `account_root`: the account-level root stored on-chain
+- `leaf_root`: the root of the consumed Lamport leaf
+- `leaf_index`: the Lamport leaf being used
+- `merkle_proof`: the proof from that leaf root to `account_root`
+- `public_key_hashes`: the 512 public key hashes for that leaf
+- `signature`: the 256 revealed preimages
+
+Those values must be ABI-encoded as `(bytes32[512],bytes32[256],uint256,bytes32[])` before assigning them to `userOp.signature`.
+
+`leaf_index` must match the account's current `nextKeyIndex()`.
+
+## Create a Lamport Account via Cast
 
 ```bash
-# Compute Merkle root
-PUB_ROOT=$(python3 signer/lamport_signer.py pubroot --seed "my-secret-seed")
+PUB_ROOT=$(python3 signer/lamport_signer.py pubroot --seed "my-secret-seed" --leaf-count 16)
 
-# Create account via factory
 cast send $FACTORY_ADDRESS \
   "createLamportAccount(bytes32,address,uint256)" \
   $PUB_ROOT \
@@ -153,18 +161,23 @@ cast send $FACTORY_ADDRESS \
   0 \
   --rpc-url $BASE_SEPOLIA_RPC_URL \
   --private-key $PRIVATE_KEY
+```
 
-# Fund the account
+Fund the account:
+
+```bash
 cast send $ACCOUNT_ADDRESS --value 0.01ether \
   --rpc-url $BASE_SEPOLIA_RPC_URL \
   --private-key $PRIVATE_KEY
 ```
 
-### Read account state
+Read account state:
 
 ```bash
 cast call $ACCOUNT_ADDRESS "publicKeyRoot()(bytes32)" --rpc-url $BASE_SEPOLIA_RPC_URL
 cast call $ACCOUNT_ADDRESS "nextKeyIndex()(uint256)" --rpc-url $BASE_SEPOLIA_RPC_URL
+cast call $ACCOUNT_ADDRESS "nonce()(uint256)" --rpc-url $BASE_SEPOLIA_RPC_URL
+cast call $ACCOUNT_ADDRESS "entryPoint()(address)" --rpc-url $BASE_SEPOLIA_RPC_URL
 cast call $ACCOUNT_ADDRESS "owner()(address)" --rpc-url $BASE_SEPOLIA_RPC_URL
 ```
 
@@ -172,30 +185,25 @@ cast call $ACCOUNT_ADDRESS "owner()(address)" --rpc-url $BASE_SEPOLIA_RPC_URL
 
 | Key Type | Size | Where to Store |
 |----------|------|---------------|
-| Lamport seed | 32 bytes | Single seed derives all keys. Store in encrypted file or env var. |
-| Lamport private key | 16 KB (512 x 32 bytes) | Derived on-demand from seed. Never store the expanded key. |
-| Falcon-512 secret key | 1,281 bytes | Store in encrypted file. Generated via ZKNox Python signer. |
+| Lamport seed | 32 bytes | Store once, derive the whole Lamport account tree from it. |
+| Lamport private key material | 16 KB per leaf | Derive on demand from the seed; do not persist expanded keys unless you must. |
+| Falcon-512 secret key | 1,281 bytes | Store in an encrypted file or HSM-backed workflow. |
 
-The seed is the ONLY secret. Back it up securely. Each Lamport signature uses one leaf — track `nextKeyIndex` to avoid reuse.
+The seed is the only Lamport secret you need to back up. Each Lamport leaf is one-time use.
 
 ## What's Inside
 
-| File | Purpose | Gas |
-|------|---------|-----|
-| `src/lamport/LamportVerifier.sol` | Pure keccak256 Lamport verification | 231K |
-| `src/lamport/LamportAccount.sol` | ERC-4337 smart account (Lamport + Merkle tree) | 747K |
-| `src/falcon/FalconAccount.sol` | ERC-4337 smart account (ZKNox ETHFALCON) | ~1.5M |
-| `src/factory/PQCAccountFactory.sol` | CREATE2 factory for both account types | -- |
-| `script/DeployFactory.s.sol` | Deploy full stack to Base Sepolia | -- |
-| `script/DeployLamport.s.sol` | Deploy Lamport verifier only | -- |
-| `script/VerifyDeployment.s.sol` | Post-deployment verification | -- |
-| `signer/lamport_signer.py` | Off-chain Lamport key gen + signing CLI | -- |
-
-## Open the Tutorial
-
-```bash
-open book.html
-```
+| File | Purpose |
+|------|---------|
+| [`src/lamport/LamportVerifier.sol`](src/lamport/LamportVerifier.sol) | Pure keccak256 Lamport verification plus account-root proof verification |
+| [`src/lamport/LamportAccount.sol`](src/lamport/LamportAccount.sol) | ERC-4337 Lamport smart account with EntryPoint and nonce enforcement |
+| [`src/falcon/FalconAccount.sol`](src/falcon/FalconAccount.sol) | ERC-4337 Falcon smart account backed by ETHFALCON |
+| [`src/factory/PQCAccountFactory.sol`](src/factory/PQCAccountFactory.sol) | CREATE2 factory for Lamport and Falcon accounts |
+| [`script/DeployFactory.s.sol`](script/DeployFactory.s.sol) | Deploy the verifier and factory stack |
+| [`script/DeployLamport.s.sol`](script/DeployLamport.s.sol) | Deploy only the Lamport verifier |
+| [`script/VerifyDeployment.s.sol`](script/VerifyDeployment.s.sol) | Live deployment verification checks |
+| [`signer/lamport_signer.py`](signer/lamport_signer.py) | Off-chain Lamport account-tree generation and signing |
+| [`book.html`](book.html) | The rendered tutorial/book |
 
 ## License
 

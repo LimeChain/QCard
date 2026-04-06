@@ -1,35 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.34;
 
 import "forge-std/Test.sol";
 import "../../src/falcon/FalconAccount.sol";
 import "../../src/interfaces/IAccount.sol";
 import {ISigVerifier} from "InterfaceVerifier/IVerifier.sol";
 
-/// @notice Mock Falcon verifier for unit testing the account contract plumbing.
-///         Real Falcon verification tests require off-chain signature generation (Python signer).
-///         This mock lets us test the account logic independently.
 contract MockFalconVerifier is ISigVerifier {
-    // Predefined "valid" signature for testing
-    bytes32 public validHash;
-    bytes public validSignature;
-    bool public shouldPass;
-
-    constructor() {
-        shouldPass = true;
-    }
-
-    function setValidSignature(bytes32 _hash, bytes memory _sig) external {
-        validHash = _hash;
-        validSignature = _sig;
-    }
+    bool public shouldPass = true;
 
     function setShouldPass(bool _pass) external {
         shouldPass = _pass;
     }
 
     function setKey(bytes calldata) external pure returns (bytes memory) {
-        // Return a fake SSTORE2 pointer (20 bytes)
         return abi.encodePacked(address(0x1234567890123456789012345678901234567890));
     }
 
@@ -48,22 +32,18 @@ contract MockFalconVerifier is ISigVerifier {
 contract FalconAccountTest is Test {
     MockFalconVerifier public mockVerifier;
     FalconAccount public account;
-    address constant OWNER = address(0xBEEF);
+
+    address internal constant OWNER = address(0xBEEF);
 
     function setUp() public {
         mockVerifier = new MockFalconVerifier();
-
-        // Deploy account with mock verifier and a dummy public key
-        bytes memory dummyPubKey = hex"DEADBEEF";
-        account = new FalconAccount(address(mockVerifier), dummyPubKey, OWNER);
+        account = new FalconAccount(address(mockVerifier), hex"DEADBEEF", address(this), OWNER);
         vm.deal(address(account), 10 ether);
     }
 
     function test_ValidateUserOp_ValidSignature() public {
-        UserOperation memory userOp = _buildUserOp(hex"CAFEBABE");
+        UserOperation memory userOp = _buildUserOp(hex"CAFEBABE", 0);
         bytes32 userOpHash = keccak256("test-falcon-op");
-
-        mockVerifier.setShouldPass(true);
 
         uint256 result = account.validateUserOp(userOp, userOpHash, 0);
         assertEq(result, 0, "Valid signature should return 0");
@@ -71,7 +51,7 @@ contract FalconAccountTest is Test {
     }
 
     function test_ValidateUserOp_InvalidSignature() public {
-        UserOperation memory userOp = _buildUserOp(hex"CAFEBABE");
+        UserOperation memory userOp = _buildUserOp(hex"CAFEBABE", 0);
         bytes32 userOpHash = keccak256("test-falcon-op");
 
         mockVerifier.setShouldPass(false);
@@ -81,17 +61,51 @@ contract FalconAccountTest is Test {
         assertEq(account.nonce(), 0, "Nonce should NOT increment");
     }
 
-    function test_Execute() public {
-        address recipient = address(0xCAFE);
+    function test_ValidateUserOp_RejectsReplay() public {
+        UserOperation memory userOp = _buildUserOp(hex"CAFEBABE", 0);
+        bytes32 userOpHash = keccak256("test-falcon-op");
+        uint256 balanceBefore = address(this).balance;
+
+        uint256 firstResult = account.validateUserOp(userOp, userOpHash, 0.1 ether);
+        uint256 secondResult = account.validateUserOp(userOp, userOpHash, 0.1 ether);
+
+        assertEq(firstResult, 0, "First validation should pass");
+        assertEq(secondResult, 1, "Replay should fail once nonce advances");
+        assertEq(account.nonce(), 1, "Nonce should only increment once");
+        assertEq(address(this).balance - balanceBefore, 0.1 ether, "EntryPoint should only receive one prefund payment");
+    }
+
+    function test_ValidateUserOp_RejectsWrongNonce() public {
+        UserOperation memory userOp = _buildUserOp(hex"CAFEBABE", 9);
+        bytes32 userOpHash = keccak256("test-falcon-op");
+
+        uint256 result = account.validateUserOp(userOp, userOpHash, 0);
+        assertEq(result, 1, "Wrong nonce should fail");
+    }
+
+    function test_ValidateUserOp_RevertsForNonEntryPoint() public {
+        UserOperation memory userOp = _buildUserOp(hex"CAFEBABE", 0);
+        bytes32 userOpHash = keccak256("test-falcon-op");
+
+        vm.prank(address(0xCAFE));
+        vm.expectRevert(FalconAccount.OnlyEntryPoint.selector);
+        account.validateUserOp(userOp, userOpHash, 0);
+    }
+
+    function test_Execute_AsOwner() public {
         vm.prank(OWNER);
-        account.execute(recipient, 1 ether, "");
-        assertEq(recipient.balance, 1 ether);
+        account.execute(address(0xCAFE), 1 ether, "");
+        assertEq(address(0xCAFE).balance, 1 ether);
+    }
+
+    function test_Execute_AsEntryPoint() public {
+        account.execute(address(0xCAFE), 1 ether, "");
+        assertEq(address(0xCAFE).balance, 1 ether);
     }
 
     function test_UpdatePublicKey_OnlyOwner() public {
         vm.prank(OWNER);
         account.updatePublicKey(hex"AABBCCDD");
-        // Should not revert
 
         vm.prank(address(0xDEAD));
         vm.expectRevert(FalconAccount.OnlyOwner.selector);
@@ -104,24 +118,18 @@ contract FalconAccountTest is Test {
     }
 
     function test_ValidatePaysFunds() public {
-        UserOperation memory userOp = _buildUserOp(hex"CAFEBABE");
+        UserOperation memory userOp = _buildUserOp(hex"CAFEBABE", 0);
         bytes32 userOpHash = keccak256("pay-test");
-        mockVerifier.setShouldPass(true);
 
-        address entryPoint = address(this);
-        uint256 balBefore = entryPoint.balance;
-
+        uint256 balBefore = address(this).balance;
         account.validateUserOp(userOp, userOpHash, 0.1 ether);
-
-        assertEq(entryPoint.balance - balBefore, 0.1 ether, "Should pay missingAccountFunds");
+        assertEq(address(this).balance - balBefore, 0.1 ether, "Should pay missingAccountFunds");
     }
 
-    // --- Helpers ---
-
-    function _buildUserOp(bytes memory sig) internal view returns (UserOperation memory) {
+    function _buildUserOp(bytes memory sig, uint256 userNonce) internal view returns (UserOperation memory) {
         return UserOperation({
             sender: address(account),
-            nonce: 0,
+            nonce: userNonce,
             callData: "",
             callGasLimit: 100000,
             verificationGasLimit: 5000000,
