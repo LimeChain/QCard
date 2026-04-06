@@ -5,2486 +5,461 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Building Quantum-Resistant Ethereum: A Hands-On Guide</title>
 <style>
-/* ============================================================
-   CSS Custom Properties
-   ============================================================ */
 :root {
-  --bg: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-tertiary: #21262d;
-  --text: #e6edf3;
-  --text-muted: #8b949e;
-  --text-heading: #f0f6fc;
-  --accent: #58a6ff;
-  --accent-hover: #79c0ff;
-  --accent-subtle: rgba(88,166,255,0.1);
-  --border: #30363d;
-  --border-active: #58a6ff;
-  --green: #3fb950;
-  --green-subtle: rgba(63,185,80,0.15);
-  --red: #f85149;
-  --yellow: #d29922;
-  --purple: #bc8cff;
-  --code-bg: #0d1117;
-  --code-border: #30363d;
-  --sidebar-width: 300px;
-  --header-height: 56px;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', Menlo, Courier, monospace;
-  --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
+  --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+  --text: #e6edf3; --muted: #8b949e; --heading: #f0f6fc;
+  --accent: #58a6ff; --accent2: #79c0ff;
+  --border: #30363d; --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  --mono: 'SF Mono','Fira Code',Menlo,Courier,monospace;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
   --radius: 6px;
-  --transition: 150ms ease;
 }
-
 [data-theme="light"] {
-  --bg: #ffffff;
-  --bg-secondary: #f6f8fa;
-  --bg-tertiary: #eaeef2;
-  --text: #1f2328;
-  --text-muted: #656d76;
-  --text-heading: #1f2328;
-  --accent: #0969da;
-  --accent-hover: #0550ae;
-  --accent-subtle: rgba(9,105,218,0.08);
-  --border: #d0d7de;
-  --border-active: #0969da;
-  --green: #1a7f37;
-  --green-subtle: rgba(26,127,55,0.1);
-  --red: #cf222e;
-  --yellow: #9a6700;
-  --purple: #8250df;
-  --code-bg: #f6f8fa;
-  --code-border: #d0d7de;
-  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.08);
-}
-
-/* ============================================================
-   Reset & Base
-   ============================================================ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-html {
-  scroll-behavior: smooth;
-  scroll-padding-top: calc(var(--header-height) + 24px);
-}
-
-body {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 1.7;
-  color: var(--text);
-  background: var(--bg);
-  -webkit-font-smoothing: antialiased;
-  transition: background var(--transition), color var(--transition);
-}
-
-/* ============================================================
-   Header
-   ============================================================ */
-.header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  height: var(--header-height);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  backdrop-filter: blur(12px);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.menu-toggle {
-  display: none;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  padding: 6px 10px;
-  cursor: pointer;
-  font-size: 18px;
-  transition: border-color var(--transition);
-}
-.menu-toggle:hover { border-color: var(--accent); }
-
-.header-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-heading);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.header-right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.progress-bar-container {
-  width: 120px;
-  height: 6px;
-  background: var(--bg-tertiary);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: var(--green);
-  border-radius: 3px;
-  transition: width 0.4s ease;
-  width: 0%;
-}
-
-.progress-text {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-  min-width: 36px;
-  text-align: right;
-}
-
-.theme-toggle {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  padding: 6px 10px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: border-color var(--transition);
-  line-height: 1;
-}
-.theme-toggle:hover { border-color: var(--accent); }
-
-/* ============================================================
-   Sidebar
-   ============================================================ */
-.sidebar {
-  position: fixed;
-  top: var(--header-height);
-  left: 0;
-  bottom: 0;
-  width: var(--sidebar-width);
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border);
-  overflow-y: auto;
-  padding: 20px 0;
-  z-index: 90;
-  transition: transform 0.3s ease, background var(--transition);
-}
-
-.sidebar-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 89;
-}
-
-.toc-section-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-muted);
-  padding: 16px 20px 6px;
-}
-
-.toc-link {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 6px 20px;
-  font-size: 14px;
-  color: var(--text-muted);
-  text-decoration: none;
-  border-left: 2px solid transparent;
-  transition: all var(--transition);
-}
-
-.toc-link:hover {
-  color: var(--text);
-  background: var(--accent-subtle);
-}
-
-.toc-link.active {
-  color: var(--accent);
-  border-left-color: var(--accent);
-  background: var(--accent-subtle);
-}
-
-.toc-chapter-num {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  min-width: 16px;
-}
-
-.toc-link.active .toc-chapter-num { color: var(--accent); }
-
-.toc-link.sub {
-  padding-left: 44px;
-  font-size: 13px;
-}
-
-.toc-checkpoint {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 1.5px solid var(--text-muted);
-  margin-right: 4px;
-  vertical-align: middle;
-  transition: all var(--transition);
-}
-
-.toc-checkpoint.done {
-  background: var(--green);
-  border-color: var(--green);
-}
-
-/* ============================================================
-   Main Content
-   ============================================================ */
-.main {
-  margin-left: var(--sidebar-width);
-  margin-top: var(--header-height);
-  min-height: calc(100vh - var(--header-height));
-  transition: margin var(--transition);
-}
-
-.content {
-  max-width: 820px;
-  margin: 0 auto;
-  padding: 40px 32px 120px;
-}
-
-/* ============================================================
-   Typography
-   ============================================================ */
-h1 {
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--text-heading);
-  margin: 48px 0 8px;
-  line-height: 1.3;
-  letter-spacing: -0.3px;
-}
-
-h1:first-child { margin-top: 0; }
-
-.chapter-subtitle {
-  font-size: 16px;
-  color: var(--text-muted);
-  margin-bottom: 32px;
-  font-weight: 400;
-}
-
-h2 {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--text-heading);
-  margin: 40px 0 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
-
-h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-heading);
-  margin: 32px 0 12px;
-}
-
-p {
-  margin: 0 0 16px;
-  color: var(--text);
-}
-
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-  color: var(--accent-hover);
-}
-
-strong { color: var(--text-heading); }
-
-ul, ol {
-  margin: 0 0 16px;
-  padding-left: 24px;
-}
-
-li { margin-bottom: 6px; }
-
-/* ============================================================
-   Chapter Divider
-   ============================================================ */
-.chapter {
-  margin-bottom: 64px;
-  padding-bottom: 64px;
-  border-bottom: 1px solid var(--border);
-}
-
-.chapter:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-
-.chapter-label {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--accent);
-  background: var(--accent-subtle);
-  padding: 4px 12px;
-  border-radius: 20px;
-  margin-bottom: 12px;
-}
-
-/* ============================================================
-   Gas Comparison Table
-   ============================================================ */
-.table-wrapper {
-  overflow-x: auto;
-  margin: 24px 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-thead {
-  background: var(--bg-tertiary);
-}
-
-th {
-  text-align: left;
-  padding: 12px 16px;
-  font-weight: 600;
-  color: var(--text-heading);
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-td {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-}
-
-tr:last-child td { border-bottom: none; }
-
-tbody tr:hover { background: var(--accent-subtle); }
-
-.badge-yes {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 12px;
-  background: var(--green-subtle);
-  color: var(--green);
-}
-
-.badge-no {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 12px;
-  background: rgba(248,81,73,0.15);
-  color: var(--red);
-}
-
-/* ============================================================
-   Code Blocks
-   ============================================================ */
-.code-block-wrapper {
-  position: relative;
-  margin: 20px 0;
-  border: 1px solid var(--code-border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.code-block-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--code-border);
-  font-size: 12px;
-}
-
-.code-block-lang {
-  color: var(--text-muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.code-block-file {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  text-decoration: none;
-}
-
-.code-block-file:hover {
-  color: var(--text);
-  text-decoration: underline;
-}
-
-.copy-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-  padding: 3px 10px;
-  cursor: pointer;
-  transition: all var(--transition);
-  font-family: var(--font-sans);
-}
-
-.copy-btn:hover {
-  color: var(--text);
-  border-color: var(--text-muted);
-}
-
-.copy-btn.copied {
-  color: var(--green);
-  border-color: var(--green);
-}
-
-pre {
-  margin: 0;
-  padding: 16px;
-  overflow-x: auto;
-  background: var(--code-bg);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text);
-  tab-size: 4;
-}
-
-code {
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-}
-
-p code, li code {
-  background: var(--bg-tertiary);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.85em;
-  color: var(--accent);
-}
-
-/* ============================================================
-   Syntax Highlighting (Minimal inline highlighter)
-   ============================================================ */
-.kw { color: #ff7b72; }     /* keywords */
-.type { color: #79c0ff; }   /* types */
-.str { color: #a5d6ff; }    /* strings */
-.num { color: #79c0ff; }    /* numbers */
-.cmt { color: #8b949e; font-style: italic; }  /* comments */
-.fn { color: #d2a8ff; }     /* function names */
-.op { color: #ff7b72; }     /* operators */
-.dec { color: #ffa657; }    /* decorators / pragmas */
-.var { color: #ffa657; }    /* variables, parameters */
-.ev { color: #3fb950; }     /* events, emit */
-.builtin { color: #79c0ff; }
-
-[data-theme="light"] .kw { color: #cf222e; }
-[data-theme="light"] .type { color: #0550ae; }
-[data-theme="light"] .str { color: #0a3069; }
-[data-theme="light"] .num { color: #0550ae; }
-[data-theme="light"] .cmt { color: #656d76; }
-[data-theme="light"] .fn { color: #8250df; }
-[data-theme="light"] .op { color: #cf222e; }
-[data-theme="light"] .dec { color: #953800; }
-[data-theme="light"] .var { color: #953800; }
-[data-theme="light"] .ev { color: #116329; }
-[data-theme="light"] .builtin { color: #0550ae; }
-
-/* ============================================================
-   Collapsible Sections
-   ============================================================ */
-.collapsible {
-  margin: 20px 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.collapsible-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 12px 16px;
-  background: var(--bg-tertiary);
-  border: none;
-  color: var(--text-heading);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-  font-family: var(--font-sans);
-  transition: background var(--transition);
-}
-
-.collapsible-toggle:hover { background: var(--accent-subtle); }
-
-.collapsible-arrow {
-  transition: transform 0.2s ease;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.collapsible.open .collapsible-arrow {
-  transform: rotate(90deg);
-}
-
-.collapsible-body {
-  display: none;
-}
-
-.collapsible.open .collapsible-body {
-  display: block;
-}
-
-.collapsible-body .code-block-wrapper {
-  margin: 0;
-  border: none;
-  border-top: 1px solid var(--code-border);
-  border-radius: 0;
-}
-
-/* ============================================================
-   Checkpoints
-   ============================================================ */
-.checkpoint {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px;
-  margin: 24px 0;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: all var(--transition);
-  user-select: none;
-}
-
-.checkpoint:hover {
-  border-color: var(--accent);
-}
-
-.checkpoint.done {
-  border-color: var(--green);
-  background: var(--green-subtle);
-}
-
-.checkpoint-box {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--text-muted);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 1px;
-  transition: all var(--transition);
-}
-
-.checkpoint.done .checkpoint-box {
-  background: var(--green);
-  border-color: var(--green);
-}
-
-.checkpoint-check {
-  display: none;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.checkpoint.done .checkpoint-check {
-  display: block;
-}
-
-.checkpoint-text {
-  flex: 1;
-}
-
-.checkpoint-label {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-  margin-bottom: 2px;
-}
-
-.checkpoint.done .checkpoint-label { color: var(--green); }
-
-.checkpoint-desc {
-  font-size: 14px;
-  color: var(--text);
-  font-family: var(--font-mono);
-}
-
-/* ============================================================
-   Callout Boxes
-   ============================================================ */
-.callout {
-  padding: 16px 20px;
-  margin: 20px 0;
-  border-radius: var(--radius);
-  border-left: 4px solid;
-  font-size: 14px;
-}
-
-.callout-info {
-  background: var(--accent-subtle);
-  border-color: var(--accent);
-}
-
-.callout-warn {
-  background: rgba(210,153,34,0.1);
-  border-color: var(--yellow);
-}
-
-.callout-danger {
-  background: rgba(248,81,73,0.1);
-  border-color: var(--red);
-}
-
-.callout-title {
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: var(--text-heading);
-}
-
-/* ============================================================
-   Inline Diagram / Figure
-   ============================================================ */
-.figure {
-  margin: 32px 0;
-  padding: 24px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  text-align: center;
-}
-
-.figure pre {
-  text-align: left;
-  display: inline-block;
-  background: none;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.figure-caption {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-top: 12px;
-}
-
-/* ============================================================
-   Responsive
-   ============================================================ */
-@media (max-width: 900px) {
-  .sidebar {
-    transform: translateX(-100%);
-    width: 280px;
-  }
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  .sidebar-overlay.open {
-    display: block;
-  }
-  .main {
-    margin-left: 0;
-  }
-  .menu-toggle {
-    display: block;
-  }
-  .content {
-    padding: 24px 16px 80px;
-  }
-  h1 { font-size: 26px; }
-  h2 { font-size: 20px; }
-  .progress-bar-container { width: 80px; }
-  .header-title { font-size: 13px; }
-}
-
-@media (max-width: 500px) {
-  .header-title { display: none; }
-}
-
-/* ============================================================
-   Print Styles
-   ============================================================ */
-@media print {
-  .header, .sidebar, .sidebar-overlay { display: none; }
-  .main { margin: 0; }
-  .content { max-width: 100%; padding: 0; }
-  .code-block-wrapper { break-inside: avoid; }
-}
+  --bg: #fff; --bg2: #f6f8fa; --bg3: #eaeef2;
+  --text: #1f2328; --muted: #656d76; --heading: #1f2328;
+  --accent: #0969da; --accent2: #0550ae;
+  --border: #d0d7de; --green: #1a7f37; --red: #cf222e; --yellow: #9a6700;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{font-family:var(--sans);font-size:16px;line-height:1.75;color:var(--text);background:var(--bg);max-width:820px;margin:0 auto;padding:24px 20px 120px;-webkit-font-smoothing:antialiased}
+h1{font-size:2em;color:var(--heading);margin:2.5em 0 .5em;padding-bottom:.3em;border-bottom:1px solid var(--border)}
+h2{font-size:1.4em;color:var(--heading);margin:2em 0 .4em}
+h3{font-size:1.1em;color:var(--heading);margin:1.5em 0 .3em}
+p{margin:.8em 0}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline;color:var(--accent2)}
+ul,ol{margin:.5em 0 .5em 1.5em}
+li{margin:.3em 0}
+code{font-family:var(--mono);font-size:.9em;background:var(--bg2);padding:2px 6px;border-radius:3px}
+pre{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;overflow-x:auto;font-family:var(--mono);font-size:.85em;line-height:1.5;margin:1em 0}
+pre code{background:none;padding:0}
+table{width:100%;border-collapse:collapse;margin:1em 0;font-size:.9em}
+th,td{border:1px solid var(--border);padding:8px 12px;text-align:left}
+th{background:var(--bg2);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--bg2);padding:16px 20px;margin:1.5em 0;border-radius:0 var(--radius) var(--radius) 0}
+.callout-warn{border-left-color:var(--yellow)}
+.callout-danger{border-left-color:var(--red)}
+.callout b{display:block;margin-bottom:6px}
+.file-link{display:inline-block;margin:.5em 0;font-family:var(--mono);font-size:.85em}
+.file-link::before{content:"📄 "}
+.gas{display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:3px;padding:1px 8px;font-family:var(--mono);font-size:.85em}
+.chip{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.8em;font-weight:600}
+.chip-yes{background:rgba(63,185,80,.15);color:var(--green)}
+.chip-no{background:rgba(248,81,73,.15);color:var(--red)}
+.header-bar{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--border);padding:12px 0;margin-bottom:2em;display:flex;justify-content:space-between;align-items:center}
+.header-bar h1{font-size:1.1em;margin:0;border:0;padding:0}
+.theme-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:4px 12px;border-radius:var(--radius);cursor:pointer;font-size:.85em}
+.diagram{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin:1.5em 0;font-family:var(--mono);font-size:.8em;line-height:1.6;white-space:pre;overflow-x:auto}
+.step{counter-increment:step;margin:1.5em 0}
+.step h3::before{content:"Step " counter(step) ": ";color:var(--accent)}
+.steps{counter-reset:step}
 </style>
 </head>
 <body>
 
-<!-- Header -->
-<header class="header">
-  <div class="header-left">
-    <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle navigation">&#9776;</button>
-    <span class="header-title">Building Quantum-Resistant Ethereum</span>
-  </div>
-  <div class="header-right">
-    <div class="progress-bar-container" title="Reading progress">
-      <div class="progress-bar-fill" id="progressFill"></div>
-    </div>
-    <span class="progress-text" id="progressText">0%</span>
-    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme" id="themeBtn">&#9790;</button>
-  </div>
-</header>
-
-<!-- Sidebar -->
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-<nav class="sidebar" id="sidebar">
-  <div class="toc-section-label">Tutorial</div>
-  <a class="toc-link" href="#gas-table"><span class="toc-chapter-num">&bull;</span> Gas Comparison Table</a>
-
-  <div class="toc-section-label">Chapter 1</div>
-  <a class="toc-link" href="#ch1"><span class="toc-chapter-num">1</span> Why Quantum Resistance Matters</a>
-  <a class="toc-link sub" href="#ch1-threat">The Quantum Threat</a>
-  <a class="toc-link sub" href="#ch1-nist">NIST Mandates &amp; Timelines</a>
-  <a class="toc-link sub" href="#ch1-eth">Ethereum's Strawmap</a>
-  <a class="toc-link sub" href="#ch1-components">The 4 Vulnerable Components</a>
-  <a class="toc-link sub" href="#ch1-migration">The Migration Path</a>
-
-  <div class="toc-section-label">Chapter 2</div>
-  <a class="toc-link" href="#ch2"><span class="toc-chapter-num">2</span> Lamport Signatures from Scratch</a>
-  <a class="toc-link sub" href="#ch2-how">How Lamport Signatures Work</a>
-  <a class="toc-link sub" href="#ch2-verifier">LamportVerifier.sol</a>
-  <a class="toc-link sub" href="#ch2-account">LamportAccount.sol</a>
-  <a class="toc-link sub" href="#ch2-tests">Tests</a>
-  <a class="toc-link sub" href="#ch2-cp"><span class="toc-checkpoint" data-cp="cp-lamport"></span> Checkpoint</a>
-
-  <div class="toc-section-label">Chapter 3</div>
-  <a class="toc-link" href="#ch3"><span class="toc-chapter-num">3</span> Falcon-512 with ETHFALCON</a>
-  <a class="toc-link sub" href="#ch3-what">What is Falcon-512?</a>
-  <a class="toc-link sub" href="#ch3-account">FalconAccount.sol</a>
-  <a class="toc-link sub" href="#ch3-tests">Tests with Mock Verifier</a>
-  <a class="toc-link sub" href="#ch3-cp"><span class="toc-checkpoint" data-cp="cp-falcon"></span> Checkpoint</a>
-
-  <div class="toc-section-label">Chapter 4</div>
-  <a class="toc-link" href="#ch4"><span class="toc-chapter-num">4</span> Deploy to Base Sepolia</a>
-  <a class="toc-link sub" href="#ch4-factory">PQCAccountFactory.sol</a>
-  <a class="toc-link sub" href="#ch4-script">DeployFactory.s.sol</a>
-  <a class="toc-link sub" href="#ch4-deploy">Deploy Commands</a>
-  <a class="toc-link sub" href="#ch4-cp"><span class="toc-checkpoint" data-cp="cp-deploy"></span> Checkpoint</a>
-
-  <div class="toc-section-label">Chapter 5</div>
-  <a class="toc-link" href="#ch5"><span class="toc-chapter-num">5</span> What's Next</a>
-  <a class="toc-link sub" href="#ch5-precompile">Path to 3,000 Gas</a>
-  <a class="toc-link sub" href="#ch5-hybrid">Hybrid Signatures</a>
-  <a class="toc-link sub" href="#ch5-naysayer">Naysayer Verification</a>
-  <a class="toc-link sub" href="#ch5-resources">Resources &amp; Links</a>
-</nav>
-
-<!-- Main Content -->
-<div class="main">
-<div class="content">
-
-<!-- ============================================================
-     GAS COMPARISON TABLE
-     ============================================================ -->
-<section id="gas-table">
-<span class="chapter-label">Reference</span>
-<h1>Gas Comparison: PQC Signature Schemes on Ethereum</h1>
-<p class="chapter-subtitle">The cost of quantum resistance today and tomorrow</p>
-
-<div class="table-wrapper">
-<table>
-<thead>
-<tr>
-  <th>Scheme</th>
-  <th>Gas Cost</th>
-  <th>Signature Size</th>
-  <th>Quantum Safe?</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td><strong>ECDSA</strong> (current)</td>
-  <td>3,000</td>
-  <td>65 bytes</td>
-  <td><span class="badge-no">No</span></td>
-</tr>
-<tr>
-  <td><strong>Lamport</strong> (this tutorial)</td>
-  <td>231,705</td>
-  <td>8,192 bytes</td>
-  <td><span class="badge-yes">Yes (hash)</span></td>
-</tr>
-<tr>
-  <td><strong>LamportAccount</strong> (with Merkle)</td>
-  <td>753,940</td>
-  <td>8,192 + proof</td>
-  <td><span class="badge-yes">Yes</span></td>
-</tr>
-<tr>
-  <td><strong>ETHFALCON</strong> (ZKNox)</td>
-  <td>~1,500,000</td>
-  <td>666 bytes</td>
-  <td><span class="badge-yes">Yes (lattice)</span></td>
-</tr>
-<tr>
-  <td><strong>Falcon precompile</strong> (future)</td>
-  <td>~3,000</td>
-  <td>666 bytes</td>
-  <td><span class="badge-yes">Yes</span></td>
-</tr>
-<tr>
-  <td><strong>Naysayer</strong> (any scheme)</td>
-  <td>~25,000</td>
-  <td>varies</td>
-  <td><span class="badge-yes">Yes</span></td>
-</tr>
-</tbody>
-</table>
+<div class="header-bar">
+  <h1>Building Quantum-Resistant Ethereum</h1>
+  <button class="theme-btn" onclick="document.documentElement.toggleAttribute('data-theme');this.textContent=document.documentElement.hasAttribute('data-theme')?'Dark':'Light'">Light</button>
 </div>
 
-<p>This tutorial walks you through building the Lamport and ETHFALCON rows above, from scratch, using Foundry and Solidity. By the end, you will have two ERC-4337 compatible quantum-resistant smart accounts deployed to Base Sepolia.</p>
-</section>
+<p><strong>A hands-on guide to post-quantum signature verification on EVM.</strong> You will build two quantum-resistant smart accounts, test them locally, and deploy to Base Sepolia. All code is in this repo &mdash; the book teaches the concepts; the files have the implementation.</p>
 
-<!-- ============================================================
+<p>Time: ~2 hours hands-on &nbsp;|&nbsp; Tests: 33 passing &nbsp;|&nbsp; Deploy target: Base Sepolia</p>
+
+<!-- ================================================================
      CHAPTER 1
-     ============================================================ -->
-<section class="chapter" id="ch1">
-<span class="chapter-label">Chapter 1</span>
-<h1>Why Quantum Resistance Matters Now</h1>
-<p class="chapter-subtitle">The threat is no longer theoretical</p>
+     ================================================================ -->
+<h1 id="ch1">Chapter 1: Why Quantum Resistance Matters Now</h1>
 
-<h2 id="ch1-threat">The Quantum Threat to Ethereum</h2>
+<p>On March 31, 2026, Google Quantum AI published a paper showing that <strong>1,200 logical qubits</strong> (roughly 500,000 physical qubits) can break Ethereum's <code>secp256k1</code> curve in approximately <strong>9 minutes</strong>. Their current Willow chip has 105 physical qubits. The gap is closing faster than anyone expected.</p>
 
-<p>In March 2026, Google published a landmark paper demonstrating that breaking the <code>secp256k1</code> elliptic curve &mdash; the curve that secures every Ethereum transaction &mdash; requires approximately <strong>1,200 logical qubits</strong> (mapped to roughly 500,000 physical qubits). Their estimate: an attacker with that hardware could derive a private key from a public key in <strong>under 9 minutes</strong>.</p>
-
-<p>To put this in perspective, Google's current Willow processor has 105 physical qubits. We need roughly a 5,000x increase in qubit count &mdash; a gap that, given the exponential pace of quantum hardware scaling, could close within a decade. The cryptographic community's consensus: <strong>the time to prepare is now</strong>, not when the hardware arrives.</p>
-
-<div class="callout callout-danger">
-  <div class="callout-title">Harvest Now, Decrypt Later</div>
-  In blockchain systems, this risk mostly applies to confidential off-chain data, not to retroactively invalidating past transactions. The signature risk is forward-looking: once a cryptographically relevant quantum computer exists, any exposed ECDSA public key can be used to derive a private key and authorize new transactions.
-</div>
-
-<h2 id="ch1-nist">NIST Mandates and Timelines</h2>
-
-<p>The U.S. National Institute of Standards and Technology has drawn a line in the sand. Their mandate is straightforward:</p>
-
+<p>This is not a distant problem:</p>
 <ul>
-  <li><strong>By 2030</strong>: Deprecate all quantum-vulnerable algorithms (ECDSA, RSA, DSA) in federal systems</li>
-  <li><strong>By 2035</strong>: Completely disallow these algorithms</li>
+  <li><strong>NIST</strong> mandates deprecation of quantum-vulnerable algorithms by 2030, full disallowance by 2035</li>
+  <li><strong>Ethereum's Strawmap</strong> plans 7 hard forks over 4 years targeting full PQ resistance by 2030</li>
+  <li><strong>Justin Drake</strong> (Ethereum Foundation) estimates &ge;10% probability of Q-Day by 2032</li>
+  <li><strong>24 of 26</strong> top blockchain protocols rely entirely on quantum-vulnerable signatures</li>
 </ul>
 
-<p>NIST's first published PQC standards are <strong>FIPS 203</strong> (ML-KEM, for key encapsulation), <strong>FIPS 204</strong> (ML-DSA / Dilithium, for digital signatures), and <strong>FIPS 205</strong> (SLH-DSA / SPHINCS+, for digital signatures). Falcon was selected for additional NIST standardization work as a separate track, but it is not part of that first published FIPS set.</p>
+<h2 id="ch1-vulnerable">What's Vulnerable</h2>
 
-<p>For Ethereum, this matters because institutional adoption depends on compliance with these standards. Exchanges, custodians, and financial institutions that touch regulated markets must follow NIST guidance. A quantum-vulnerable Ethereum becomes a compliance risk.</p>
-
-<h2 id="ch1-eth">Ethereum's Strawmap</h2>
-
-<p>The Ethereum Foundation's post-quantum team publishes a <strong>living roadmap</strong>, not a fixed schedule. The current roadmap uses milestone labels across execution, consensus, and data layers and is explicitly subject to change as research, implementation, and governance evolve:</p>
-
-<ol>
-  <li><strong>I*</strong>: PQ key registry (consensus)</li>
-  <li><strong>J*</strong>: PQ signature precompiles / execution-layer verification support</li>
-  <li><strong>L*</strong>: PQ attestations, real-time CL proofs, leanVM (consensus + data)</li>
-  <li><strong>M*</strong>: PQ signature aggregation and PQ blobs (execution + data)</li>
-  <li><strong>Longer term</strong>: full PQ consensus, PQ transactions, and PQ sampling</li>
-</ol>
-
-<p>For this tutorial, the relevant direction is the execution-layer work around lower-cost native PQ signature verification. The exact precompile shape, gas schedule, and shipping timeline are not fixed yet. Until then, we build with pure-Solidity and library-backed verifiers.</p>
-
-<h2 id="ch1-components">The Four Vulnerable Components</h2>
-
-<p>Ethereum's security rests on four cryptographic primitives, all of which are quantum-vulnerable:</p>
-
-<div class="table-wrapper">
 <table>
-<thead>
-<tr><th>Component</th><th>Algorithm</th><th>Where Used</th><th>Shor's Breaks It?</th></tr>
-</thead>
-<tbody>
-<tr><td><strong>ECDSA</strong></td><td>secp256k1</td><td>User transaction signatures (EOAs)</td><td>Yes &mdash; factor discrete log</td></tr>
-<tr><td><strong>BLS</strong></td><td>BLS12-381</td><td>Validator signatures in beacon chain</td><td>Yes &mdash; factor discrete log</td></tr>
-<tr><td><strong>KZG</strong></td><td>KZG on BN254</td><td>Data availability sampling (EIP-4844 blobs)</td><td>Yes &mdash; pairing-based</td></tr>
-<tr><td><strong>Groth16</strong></td><td>Pairing-based zk-SNARKs</td><td>ZK-rollup validity proofs</td><td>Yes &mdash; pairing-based</td></tr>
-</tbody>
+<tr><th>Component</th><th>Algorithm</th><th>Used For</th><th>Quantum Breaks It?</th></tr>
+<tr><td>ECDSA</td><td>secp256k1</td><td>User transaction signatures</td><td><span class="chip chip-yes">Yes &mdash; Shor's</span></td></tr>
+<tr><td>BLS</td><td>BLS12-381</td><td>Validator attestations</td><td><span class="chip chip-yes">Yes</span></td></tr>
+<tr><td>KZG</td><td>BN254</td><td>Data availability (blobs)</td><td><span class="chip chip-yes">Yes</span></td></tr>
+<tr><td>Groth16</td><td>Pairing-based</td><td>ZK-rollup proofs</td><td><span class="chip chip-yes">Yes</span></td></tr>
 </table>
+
+<p>This tutorial addresses the first row: <strong>replacing ECDSA with post-quantum signatures at the smart account level</strong>, using account abstraction. No hard fork needed.</p>
+
+<h2 id="ch1-aa">Why Account Abstraction Is the Migration Path</h2>
+
+<p>Through <a href="https://eips.ethereum.org/EIPS/eip-4337">ERC-4337</a>, Ethereum already supports smart contract accounts with custom signature verification. The <code>validateUserOp()</code> function can run <em>any</em> verification logic &mdash; Lamport, Falcon, Dilithium, anything. The infrastructure is live: 40M+ smart accounts deployed, bundlers running on every major chain.</p>
+
+<p>Instead of waiting for protocol changes, we build today:</p>
+
+<div class="diagram">
+Off-chain signer          Bundler (Pimlico)        On-chain
+      |                         |                      |
+      |-- Generate PQC keypair  |                      |
+      |-- Sign userOpHash       |                      |
+      |-- Submit UserOp ------->|-- Simulate ---------> |
+      |                         |-- Bundle & send ----> |-- validateUserOp()
+      |                         |                      |     (PQC verification)
+      |                         |                      |-- execute()
 </div>
 
-<p>This tutorial focuses on the first component: <strong>replacing ECDSA with post-quantum signature schemes</strong> at the smart account level. This is the layer that developers can address today, without waiting for protocol-level hard forks.</p>
+<p><strong>MetaMask cannot sign for PQC accounts</strong> &mdash; it only does ECDSA. Signing happens in a Python CLI or custom app. MetaMask <em>can</em> send ETH to your PQC account (it's a regular address) and view it on BaseScan.</p>
 
-<h2 id="ch1-migration">The Migration Path: Account Abstraction</h2>
+<h2 id="ch1-what">What We Build</h2>
 
-<p>The key insight that makes all of this possible <em>today</em> is <strong>account abstraction</strong>. Through <a href="https://eips.ethereum.org/EIPS/eip-4337">ERC-4337</a> and the newer <a href="https://eips.ethereum.org/EIPS/eip-7702">EIP-7702</a>, Ethereum already supports smart contract accounts with custom signature verification logic.</p>
+<table>
+<tr><th>Account</th><th>Algorithm</th><th>Gas Cost</th><th>Signature Size</th><th>Key Advantage</th></tr>
+<tr><td><strong>LamportAccount</strong></td><td>Lamport (keccak256 only)</td><td><span class="gas">~754K</span></td><td>8,192 bytes</td><td>Zero dependencies, auditable</td></tr>
+<tr><td><strong>FalconAccount</strong></td><td>Falcon-512 (ETHFALCON)</td><td><span class="gas">~1.5M</span></td><td>666 bytes</td><td>NIST standard, compact sigs</td></tr>
+</table>
 
-<p>Instead of waiting for the protocol to change, we can:</p>
-<ol>
-  <li>Deploy a smart account contract that implements <code>validateUserOp()</code></li>
-  <li>Wire in any signature verification algorithm we want &mdash; Lamport, Falcon, Dilithium</li>
-  <li>Submit transactions through ERC-4337 bundlers (live on all major L2s and mainnet)</li>
-</ol>
+<p>Both are ERC-4337 accounts deployed via a shared <code>PQCAccountFactory</code> with CREATE2 deterministic addresses.</p>
 
-<div class="callout callout-info">
-  <div class="callout-title">What we build in this tutorial</div>
-  Two fully functional ERC-4337 quantum-resistant smart accounts:
-  <ol style="margin-top: 8px;">
-    <li><strong>LamportAccount</strong> &mdash; Hash-based one-time signatures using only <code>keccak256</code>. Simple, auditable, ~230K gas.</li>
-    <li><strong>FalconAccount</strong> &mdash; Lattice-based signatures via ZKNox's ETHFALCON. Compact signatures, library-backed today, ~1.5M gas.</li>
-  </ol>
-  Plus a factory contract to deploy both, tested and ready for Base Sepolia.
-</div>
-</section>
-
-<!-- ============================================================
+<!-- ================================================================
      CHAPTER 2
-     ============================================================ -->
-<section class="chapter" id="ch2">
-<span class="chapter-label">Chapter 2</span>
-<h1>Lamport Signatures from Scratch</h1>
-<p class="chapter-subtitle">Quantum resistance using nothing but hash functions</p>
+     ================================================================ -->
+<h1 id="ch2">Chapter 2: Lamport Signatures from Scratch</h1>
 
-<h2 id="ch2-how">How Lamport Signatures Work</h2>
+<p>Lamport signatures (1979) are the simplest post-quantum scheme. Security depends <em>only</em> on hash preimage resistance &mdash; if you can't reverse <code>keccak256</code>, you can't forge a signature. No lattices, no curves, no number theory.</p>
 
-<p>Lamport signatures, invented by Leslie Lamport in 1979, are the simplest post-quantum signature scheme. Their security relies entirely on the <strong>preimage resistance</strong> of a hash function &mdash; if you can't reverse <code>keccak256</code>, you can't forge a signature. No lattices, no curves, no number theory. Just hashing.</p>
+<h2 id="ch2-how">How It Works</h2>
 
-<h3>Key Generation</h3>
-<p>Generate 256 pairs of random 32-byte values (512 values total). Hash each one. The 512 hashes are your <strong>public key</strong>. The 512 original values are your <strong>private key</strong>.</p>
+<p><strong>Key generation:</strong> Generate 256 pairs of random 32-byte values (512 total). Hash each one. The 512 hashes are your public key; the 512 originals are your private key.</p>
 
-<div class="figure">
-<pre>
-Private Key (keep secret)          Public Key (publish)
-===========================        ===========================
-Pair 0:  [left_0,  right_0]  -->  [H(left_0),  H(right_0)]
-Pair 1:  [left_1,  right_1]  -->  [H(left_1),  H(right_1)]
-  ...         ...                       ...
-Pair 255:[left_255,right_255] -->  [H(left_255),H(right_255)]
-</pre>
-<div class="figure-caption">256 pairs &rarr; 512 secret values &rarr; 512 public hashes</div>
+<p><strong>Signing:</strong> Hash the message to get a 256-bit digest. For each bit <em>i</em>: if bit is 0, reveal the left preimage; if 1, reveal the right. The signature is 256 revealed preimages (8 KB).</p>
+
+<p><strong>Verification:</strong> Hash each revealed preimage and compare against the public key hash. 256 matches = valid.</p>
+
+<div class="diagram">
+Private Key (secret)              Public Key (on-chain)
+========================          ========================
+Pair 0: [left_0, right_0]  --->  [H(left_0), H(right_0)]
+Pair 1: [left_1, right_1]  --->  [H(left_1), H(right_1)]
+  ...                               ...
+Pair 255: [left_255, right_255] -> [H(left_255), H(right_255)]
+
+Signing message hash 1011...0:
+  bit 0 = 1 --> reveal right_0
+  bit 1 = 0 --> reveal left_1
+  bit 2 = 1 --> reveal right_2
+  ...
 </div>
 
-<h3>Signing</h3>
-<p>To sign a message, hash it to get a 256-bit digest. For each bit of the digest:</p>
+<div class="callout callout-warn"><b>One-Time Use</b> Each key pair signs exactly one message. A second signature reveals more preimages, enabling forgery. Our account handles this with a Merkle tree of many key pairs, tracked by <code>nextKeyIndex</code>.</div>
+
+<h2 id="ch2-why-evm">Why Lamport Is Special on EVM</h2>
+
+<p>The EVM has a native <code>keccak256</code> opcode costing just <strong>36 gas</strong> per hash. Other hash functions (SHA-256, SHAKE) must be emulated in Solidity at 10-100x the cost. Lamport uses <em>nothing but</em> keccak256, making it the cheapest PQC option on EVM:</p>
+
 <ul>
-  <li>If bit <em>i</em> is <code>0</code>: reveal <code>left_i</code> (the left preimage from pair <em>i</em>)</li>
-  <li>If bit <em>i</em> is <code>1</code>: reveal <code>right_i</code> (the right preimage from pair <em>i</em>)</li>
-</ul>
-<p>The signature is 256 revealed preimages (256 &times; 32 bytes = 8,192 bytes).</p>
-
-<h3>Verification</h3>
-<p>Hash each of the 256 revealed preimages and compare against the corresponding public key hash. If all 256 match, the signature is valid.</p>
-
-<div class="callout callout-warn">
-  <div class="callout-title">One-Time Use Only</div>
-  Each Lamport key pair can only sign <strong>one</strong> message. Signing a second message reveals additional preimages, allowing an attacker to forge signatures. Our <code>LamportAccount</code> handles this by using a Merkle tree of many key pairs and tracking which ones have been used.
-</div>
-
-<h2 id="ch2-verifier">LamportVerifier.sol</h2>
-<p>The verifier implements the core algorithm: loop through 256 bits, hash each preimage, compare against the public key. It also includes a <code>verifyWithRoot()</code> variant that compresses one Lamport public key into a leaf root and verifies that leaf against the account-level Merkle root.</p>
-
-<div class="code-block-wrapper">
-  <div class="code-block-header">
-    <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/lamport/LamportVerifier.sol" target="_blank" rel="noopener">src/lamport/LamportVerifier.sol</a>
-    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-  </div>
-  <pre><code>// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
-
-/// @title LamportVerifier — Quantum-resistant signature verification using only keccak256
-/// @notice Lamport one-time signatures: the simplest post-quantum scheme.
-///         Security relies solely on hash preimage resistance — no lattices, no curves.
-///
-/// How it works:
-///   Key generation: Generate 256 pairs of random 32-byte values. Hash each → 512 hashes = public key.
-///   Signing: For each bit of the message hash, reveal the left or right preimage from that pair.
-///   Verification: Hash each revealed preimage and compare against the stored public key hash.
-///
-/// Gas cost: ~300K (256 keccak256 ops + calldata for 256 x 32-byte preimages)
-contract LamportVerifier {
-    /// @notice Verify a Lamport signature against a public key
-    /// @param msgHash The 32-byte hash of the message being verified
-    /// @param pubKeyHashes The 512 hashes that form the public key [pair0_left, pair0_right, pair1_left, ...]
-    /// @param signature The 256 revealed preimages (one per bit of msgHash)
-    /// @return valid True if the signature is valid
-    function verify(
-        bytes32 msgHash,
-        bytes32[512] calldata pubKeyHashes,
-        bytes32[256] calldata signature
-    ) external pure returns (bool valid) {
-        for (uint256 i = 0; i &lt; 256; i++) {
-            // Extract bit i from the message hash
-            uint256 bit = (uint256(msgHash) &gt;&gt; (255 - i)) &amp; 1;
-
-            // The signer revealed the preimage for the left (bit=0) or right (bit=1) hash
-            // Compute the hash of the revealed preimage
-            bytes32 computed = keccak256(abi.encodePacked(signature[i]));
-
-            // Compare against the correct public key hash
-            // pubKeyHashes[2*i] = hash of left value, pubKeyHashes[2*i+1] = hash of right value
-            bytes32 expected = pubKeyHashes[2 * i + bit];
-
-            if (computed != expected) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /// @notice Verify using an account-level Merkle root instead of the full 512-hash public key
-    /// @dev The Lamport public key hashes are first compressed into a leaf root, then checked against the account root
-    /// @param msgHash Message hash to verify
-    /// @param accountRoot Merkle root of all Lamport leaf roots registered on the account
-    /// @param pubKeyHashes Full 512 public key hashes (verified against root)
-    /// @param signature The 256 revealed preimages
-    /// @param leafIndex Index of the Lamport leaf within the account-level Merkle tree
-    /// @param merkleProof Sibling hashes proving the Lamport leaf against `accountRoot`
-    /// @return valid True if both the Merkle root matches and the signature is valid
-    function verifyWithRoot(
-        bytes32 msgHash,
-        bytes32 accountRoot,
-        bytes32[512] calldata pubKeyHashes,
-        bytes32[256] calldata signature,
-        uint256 leafIndex,
-        bytes32[] calldata merkleProof
-    ) external pure returns (bool valid) {
-        bytes32 lamportRoot = _computeMerkleRoot(pubKeyHashes);
-        if (!_verifyProof(lamportRoot, leafIndex, merkleProof, accountRoot)) {
-            return false;
-        }
-
-        for (uint256 i = 0; i &lt; 256; i++) {
-            uint256 bit = (uint256(msgHash) &gt;&gt; (255 - i)) &amp; 1;
-            bytes32 computed = keccak256(abi.encodePacked(signature[i]));
-            bytes32 expected = pubKeyHashes[2 * i + bit];
-            if (computed != expected) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /// @notice Compute the Merkle root of the 512 Lamport public key hashes
-    function _computeMerkleRoot(bytes32[512] calldata leaves) internal pure returns (bytes32) {
-        bytes32[512] memory layer;
-        for (uint256 i = 0; i &lt; 512; i++) {
-            layer[i] = leaves[i];
-        }
-
-        uint256 n = 512;
-        while (n &gt; 1) {
-            for (uint256 i = 0; i &lt; n / 2; i++) {
-                layer[i] = keccak256(abi.encodePacked(layer[2 * i], layer[2 * i + 1]));
-            }
-            n /= 2;
-        }
-        return layer[0];
-    }
-
-    function _verifyProof(
-        bytes32 leaf,
-        uint256 leafIndex,
-        bytes32[] calldata merkleProof,
-        bytes32 expectedRoot
-    ) internal pure returns (bool) {
-        bytes32 computed = leaf;
-        uint256 idx = leafIndex;
-
-        for (uint256 i = 0; i &lt; merkleProof.length; i++) {
-            bytes32 sibling = merkleProof[i];
-            if ((idx &amp; 1) == 0) {
-                computed = keccak256(abi.encodePacked(computed, sibling));
-            } else {
-                computed = keccak256(abi.encodePacked(sibling, computed));
-            }
-            idx &gt;&gt;= 1;
-        }
-
-        return computed == expectedRoot;
-    }
-}
-</code></pre>
-</div>
-
-<h2 id="ch2-account">LamportAccount.sol</h2>
-<p>The account contract wraps the verifier into an ERC-4337 compatible smart account. It stores an account-level Merkle root of Lamport leaf roots, requires the configured EntryPoint to call <code>validateUserOp</code>, checks the userOp nonce, and consumes exactly one Lamport leaf per successful validation.</p>
-
-<div class="code-block-wrapper">
-  <div class="code-block-header">
-    <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/lamport/LamportAccount.sol" target="_blank" rel="noopener">src/lamport/LamportAccount.sol</a>
-    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-  </div>
-  <pre><code>// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
-
-import {IAccount, UserOperation} from &quot;../interfaces/IAccount.sol&quot;;
-import {LamportVerifier} from &quot;./LamportVerifier.sol&quot;;
-
-/// @title LamportAccount — Quantum-resistant smart account using Lamport signatures
-/// @notice ERC-4337 compatible account that verifies Lamport one-time signatures.
-///         Uses a Merkle tree of Lamport public keys to support multiple transactions
-///         from a single compact root.
-///
-/// Key management:
-///   - Owner registers a Merkle root of 2^TREE_HEIGHT Lamport public keys
-///   - Each transaction uses the next unused leaf (one-time signature)
-///   - The contract tracks which leaf index is next via `nextKeyIndex`
-///   - When all leaves are used, the owner registers a new Merkle root
-contract LamportAccount is IAccount {
-    LamportVerifier public immutable verifier;
-    address public immutable entryPoint;
-    bytes32 public publicKeyRoot;
-    uint256 public nextKeyIndex;
-    address public owner;
-    uint256 public nonce;
-
-    uint256 internal constant SIG_VALIDATION_FAILED = 1;
-
-    event KeyRootUpdated(bytes32 indexed newRoot);
-    event Executed(address indexed target, uint256 value, bytes data);
-
-    error OnlyEntryPoint();
-    error OnlyOwner();
-    error OnlyEntryPointOrOwner();
-    error ExecutionFailed();
-
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert OnlyOwner();
-        _;
-    }
-
-    constructor(address _verifier, bytes32 _publicKeyRoot, address _entryPoint, address _owner) {
-        verifier = LamportVerifier(_verifier);
-        entryPoint = _entryPoint;
-        publicKeyRoot = _publicKeyRoot;
-        owner = _owner;
-    }
-
-    /// @notice ERC-4337 signature validation
-    /// @dev Signature format:
-    ///      abi.encode(bytes32[512] pubKeyHashes, bytes32[256] lamportSig, uint256 leafIndex, bytes32[] proof)
-    function validateUserOp(
-        UserOperation calldata userOp,
-        bytes32 userOpHash,
-        uint256 missingAccountFunds
-    ) external override returns (uint256 validationData) {
-        if (msg.sender != entryPoint) revert OnlyEntryPoint();
-        if (userOp.sender != address(this) || userOp.nonce != nonce) {
-            return SIG_VALIDATION_FAILED;
-        }
-
-        (
-            bytes32[512] memory pubKeyHashes,
-            bytes32[256] memory lamportSig,
-            uint256 leafIndex,
-            bytes32[] memory merkleProof
-        ) = abi.decode(userOp.signature, (bytes32[512], bytes32[256], uint256, bytes32[]));
-
-        if (leafIndex != nextKeyIndex) {
-            return SIG_VALIDATION_FAILED;
-        }
-
-        bool valid = verifier.verifyWithRoot(
-            userOpHash,
-            publicKeyRoot,
-            pubKeyHashes,
-            lamportSig,
-            leafIndex,
-            merkleProof
-        );
-
-        if (!valid) {
-            return SIG_VALIDATION_FAILED;
-        }
-
-        nextKeyIndex++;
-        nonce++;
-
-        if (missingAccountFunds &gt; 0) {
-            (bool success,) = payable(entryPoint).call{value: missingAccountFunds}(&quot;&quot;);
-            (success); // ignore failure (EntryPoint will handle it)
-        }
-
-        return 0; // success
-    }
-
-    /// @notice Execute a call from this account (only owner or EntryPoint after validation)
-    function execute(address target, uint256 value, bytes calldata data) external {
-        if (msg.sender != owner &amp;&amp; msg.sender != entryPoint) revert OnlyEntryPointOrOwner();
-        (bool success,) = target.call{value: value}(data);
-        if (!success) revert ExecutionFailed();
-        emit Executed(target, value, data);
-    }
-
-    /// @notice Update the Lamport key tree root (for key rotation)
-    function updateKeyRoot(bytes32 newRoot) external onlyOwner {
-        publicKeyRoot = newRoot;
-        nextKeyIndex = 0;
-        emit KeyRootUpdated(newRoot);
-    }
-
-    receive() external payable {}
-}
-</code></pre>
-</div>
-
-<h2 id="ch2-tests">Tests</h2>
-<p>The test file demonstrates key generation, signing, and verification entirely on-chain. It uses deterministic seeds for reproducibility and includes gas measurement.</p>
-
-<div class="collapsible" id="col-lamport-test">
-  <button class="collapsible-toggle" onclick="toggleCollapsible('col-lamport-test')">
-    <span class="collapsible-arrow">&#9654;</span>
-    test/lamport/LamportVerifier.t.sol &mdash; Full test suite (225 lines)
-  </button>
-  <div class="collapsible-body">
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/test/lamport/LamportVerifier.t.sol" target="_blank" rel="noopener">test/lamport/LamportVerifier.t.sol</a>
-        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-      </div>
-      <pre><code>// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
-
-import &quot;forge-std/Test.sol&quot;;
-import &quot;../../src/lamport/LamportVerifier.sol&quot;;
-
-contract LamportVerifierTest is Test {
-    uint256 internal constant LEAF_COUNT = 4;
-
-    LamportVerifier public verifier;
-
-    function setUp() public {
-        verifier = new LamportVerifier();
-    }
-
-    function test_VerifyValidSignature() public view {
-        bytes32 seed = keccak256(&quot;test-seed-1&quot;);
-        (bytes32[512] memory pubKeyHashes, bytes32[512] memory privateKeys) = _generateKeypair(seed);
-
-        bytes32 msgHash = keccak256(&quot;hello quantum world&quot;);
-        bytes32[256] memory signature = _sign(msgHash, privateKeys);
-
-        bool valid = verifier.verify(msgHash, pubKeyHashes, signature);
-        assertTrue(valid, &quot;Valid Lamport signature should verify&quot;);
-    }
-
-    function test_RejectInvalidSignature() public view {
-        bytes32 seed = keccak256(&quot;test-seed-2&quot;);
-        (bytes32[512] memory pubKeyHashes, bytes32[512] memory privateKeys) = _generateKeypair(seed);
-
-        bytes32 msgHash = keccak256(&quot;hello quantum world&quot;);
-        bytes32[256] memory signature = _sign(msgHash, privateKeys);
-        signature[0] = bytes32(uint256(signature[0]) ^ 1);
-
-        bool valid = verifier.verify(msgHash, pubKeyHashes, signature);
-        assertFalse(valid, &quot;Corrupted signature should fail verification&quot;);
-    }
-
-    function test_RejectWrongMessage() public view {
-        bytes32 seed = keccak256(&quot;test-seed-3&quot;);
-        (bytes32[512] memory pubKeyHashes, bytes32[512] memory privateKeys) = _generateKeypair(seed);
-
-        bytes32 msgHash = keccak256(&quot;original message&quot;);
-        bytes32[256] memory signature = _sign(msgHash, privateKeys);
-
-        bytes32 wrongHash = keccak256(&quot;different message&quot;);
-        bool valid = verifier.verify(wrongHash, pubKeyHashes, signature);
-        assertFalse(valid, &quot;Signature for wrong message should fail&quot;);
-    }
-
-    function test_VerifyWithAccountRoot() public view {
-        bytes32[LEAF_COUNT] memory leafRoots;
-        bytes32[512] memory pubKeyHashes;
-        bytes32[512] memory privateKeys;
-
-        for (uint256 leafIndex = 0; leafIndex &lt; LEAF_COUNT; leafIndex++) {
-            (bytes32[512] memory leafPubKeyHashes, bytes32[512] memory leafPrivateKeys) =
-                _generateKeypair(keccak256(abi.encodePacked(&quot;leaf&quot;, leafIndex)));
-            leafRoots[leafIndex] = _computeLamportRoot(leafPubKeyHashes);
-
-            if (leafIndex == 2) {
-                pubKeyHashes = leafPubKeyHashes;
-                privateKeys = leafPrivateKeys;
-            }
-        }
-
-        bytes32 accountRoot = _computeAccountRoot(leafRoots);
-        bytes32[] memory proof = _buildProof(leafRoots, 2);
-        bytes32 msgHash = keccak256(&quot;merkle root test&quot;);
-        bytes32[256] memory signature = _sign(msgHash, privateKeys);
-
-        bool valid = verifier.verifyWithRoot(msgHash, accountRoot, pubKeyHashes, signature, 2, proof);
-        assertTrue(valid, &quot;Valid signature with correct account root should verify&quot;);
-    }
-
-    function test_RejectWrongMerkleProof() public view {
-        bytes32[LEAF_COUNT] memory leafRoots;
-        bytes32[512] memory pubKeyHashes;
-        bytes32[512] memory privateKeys;
-
-        for (uint256 leafIndex = 0; leafIndex &lt; LEAF_COUNT; leafIndex++) {
-            (bytes32[512] memory leafPubKeyHashes, bytes32[512] memory leafPrivateKeys) =
-                _generateKeypair(keccak256(abi.encodePacked(&quot;leaf&quot;, leafIndex)));
-            leafRoots[leafIndex] = _computeLamportRoot(leafPubKeyHashes);
-
-            if (leafIndex == 1) {
-                pubKeyHashes = leafPubKeyHashes;
-                privateKeys = leafPrivateKeys;
-            }
-        }
-
-        bytes32 accountRoot = _computeAccountRoot(leafRoots);
-        bytes32[] memory proof = _buildProof(leafRoots, 1);
-        proof[0] = bytes32(uint256(proof[0]) ^ 1);
-
-        bytes32 msgHash = keccak256(&quot;merkle root test&quot;);
-        bytes32[256] memory signature = _sign(msgHash, privateKeys);
-
-        bool valid = verifier.verifyWithRoot(msgHash, accountRoot, pubKeyHashes, signature, 1, proof);
-        assertFalse(valid, &quot;Wrong proof should fail&quot;);
-    }
-
-    function test_RejectWrongLeafIndex() public view {
-        bytes32[LEAF_COUNT] memory leafRoots;
-        bytes32[512] memory pubKeyHashes;
-        bytes32[512] memory privateKeys;
-
-        for (uint256 leafIndex = 0; leafIndex &lt; LEAF_COUNT; leafIndex++) {
-            (bytes32[512] memory leafPubKeyHashes, bytes32[512] memory leafPrivateKeys) =
-                _generateKeypair(keccak256(abi.encodePacked(&quot;leaf&quot;, leafIndex)));
-            leafRoots[leafIndex] = _computeLamportRoot(leafPubKeyHashes);
-
-            if (leafIndex == 1) {
-                pubKeyHashes = leafPubKeyHashes;
-                privateKeys = leafPrivateKeys;
-            }
-        }
-
-        bytes32 accountRoot = _computeAccountRoot(leafRoots);
-        bytes32[] memory proof = _buildProof(leafRoots, 1);
-        bytes32 msgHash = keccak256(&quot;merkle root test&quot;);
-        bytes32[256] memory signature = _sign(msgHash, privateKeys);
-
-        bool valid = verifier.verifyWithRoot(msgHash, accountRoot, pubKeyHashes, signature, 0, proof);
-        assertFalse(valid, &quot;Mismatched leaf index should fail&quot;);
-    }
-
-    function test_GasCost() public {
-        bytes32 seed = keccak256(&quot;gas-test&quot;);
-        (bytes32[512] memory pubKeyHashes, bytes32[512] memory privateKeys) = _generateKeypair(seed);
-
-        bytes32 msgHash = keccak256(&quot;measure gas&quot;);
-        bytes32[256] memory signature = _sign(msgHash, privateKeys);
-
-        uint256 gasBefore = gasleft();
-        verifier.verify(msgHash, pubKeyHashes, signature);
-        uint256 gasUsed = gasBefore - gasleft();
-
-        emit log_named_uint(&quot;Lamport verify gas&quot;, gasUsed);
-        assertLt(gasUsed, 500_000, &quot;Lamport verification should cost less than 500K gas&quot;);
-    }
-
-    function _generateKeypair(bytes32 seed)
-        internal
-        pure
-        returns (bytes32[512] memory pubKeyHashes, bytes32[512] memory privateKeys)
-    {
-        for (uint256 i = 0; i &lt; 512; i++) {
-            privateKeys[i] = keccak256(abi.encodePacked(seed, i));
-            pubKeyHashes[i] = keccak256(abi.encodePacked(privateKeys[i]));
-        }
-    }
-
-    function _sign(bytes32 msgHash, bytes32[512] memory privateKeys)
-        internal
-        pure
-        returns (bytes32[256] memory signature)
-    {
-        for (uint256 i = 0; i &lt; 256; i++) {
-            uint256 bit = (uint256(msgHash) &gt;&gt; (255 - i)) &amp; 1;
-            signature[i] = privateKeys[2 * i + bit];
-        }
-    }
-
-    function _computeLamportRoot(bytes32[512] memory leaves) internal pure returns (bytes32) {
-        bytes32[512] memory layer;
-        for (uint256 i = 0; i &lt; 512; i++) {
-            layer[i] = leaves[i];
-        }
-
-        uint256 n = 512;
-        while (n &gt; 1) {
-            for (uint256 i = 0; i &lt; n / 2; i++) {
-                layer[i] = keccak256(abi.encodePacked(layer[2 * i], layer[2 * i + 1]));
-            }
-            n /= 2;
-        }
-
-        return layer[0];
-    }
-
-    function _computeAccountRoot(bytes32[LEAF_COUNT] memory leaves) internal pure returns (bytes32) {
-        bytes32[LEAF_COUNT] memory layer;
-        for (uint256 i = 0; i &lt; LEAF_COUNT; i++) {
-            layer[i] = leaves[i];
-        }
-        uint256 n = LEAF_COUNT;
-
-        while (n &gt; 1) {
-            for (uint256 i = 0; i &lt; n / 2; i++) {
-                layer[i] = keccak256(abi.encodePacked(layer[2 * i], layer[2 * i + 1]));
-            }
-            n /= 2;
-        }
-
-        return layer[0];
-    }
-
-    function _buildProof(bytes32[LEAF_COUNT] memory leaves, uint256 leafIndex)
-        internal
-        pure
-        returns (bytes32[] memory proof)
-    {
-        proof = new bytes32[](2);
-        bytes32[LEAF_COUNT] memory layer;
-        for (uint256 i = 0; i &lt; LEAF_COUNT; i++) {
-            layer[i] = leaves[i];
-        }
-        uint256 idx = leafIndex;
-        uint256 n = LEAF_COUNT;
-        uint256 proofIndex;
-
-        while (n &gt; 1) {
-            uint256 siblingIndex = idx ^ 1;
-            proof[proofIndex++] = layer[siblingIndex];
-
-            for (uint256 i = 0; i &lt; n / 2; i++) {
-                layer[i] = keccak256(abi.encodePacked(layer[2 * i], layer[2 * i + 1]));
-            }
-
-            idx /= 2;
-            n /= 2;
-        }
-    }
-}
-</code></pre>
-    </div>
-  </div>
-</div>
-
-<h2 id="ch2-steps">Step by Step: Build and Test the Lamport PoC</h2>
-
-<p>Follow these steps exactly. Each step tells you what to run and what output to expect.</p>
-
-<h3>Step 1: Clone the repository</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>git clone https://github.com/AstroSky26/quantum-resistant-eth.git
-cd quantum-resistant-eth/book</code></pre>
-</div>
-
-<h3>Step 2: Install Foundry (if you don't have it)</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>curl -L https://foundry.paradigm.xyz | bash
-foundryup
-forge --version  <span class="cmt"># Should print: forge Version: 1.x.x</span></code></pre>
-</div>
-
-<h3>Step 3: Install git submodules (ETHFALCON, forge-std, sstore2)</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>forge install</code></pre>
-</div>
-<p>This downloads three libraries into <code>lib/</code>:</p>
-<ul>
-  <li><code>forge-std</code> &mdash; Foundry's testing framework (assertions, vm cheats)</li>
-  <li><code>ETHFALCON</code> &mdash; ZKNox's Falcon-512 Solidity verifier + NTT library</li>
-  <li><code>sstore2</code> &mdash; Gas-efficient storage used by ETHFALCON for public keys</li>
-</ul>
-<p>If submodule install fails, install them individually:</p>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>forge install foundry-rs/forge-std
-forge install ZKNoxHQ/ETHFALCON
-forge install 0xsequence/sstore2</code></pre>
-</div>
-
-<h3>Step 4: Compile all contracts</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>forge build</code></pre>
-</div>
-<p><strong>Expected output:</strong></p>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">output</span></div>
-  <pre><code>Compiling with Solc 0.8.34
-Compiler run successful!</code></pre>
-</div>
-
-<h3>Step 5: Run the Lamport tests</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>forge test --match-path "test/lamport/*" -vv</code></pre>
-</div>
-<p><strong>Expected output (18 tests, all PASS):</strong></p>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">output</span></div>
-  <pre><code>[PASS] test_GasCost()
-  Lamport verify gas: 231705
-[PASS] test_VerifyWithAccountRoot()
-[PASS] test_ValidateUserOp_RejectsReplay()
-[PASS] test_GasCost_ValidateUserOp()
-  LamportAccount validateUserOp gas: 753940
-18 tests passed, 0 failed</code></pre>
-</div>
-
-<p><strong>What the tests prove:</strong></p>
-<ul>
-  <li><code>test_VerifyValidSignature</code> &mdash; A valid Lamport signature (256 correct preimages) verifies against 512 public key hashes</li>
-  <li><code>test_RejectInvalidSignature</code> &mdash; Flipping a single bit in one preimage causes verification to fail</li>
-  <li><code>test_RejectWrongMessage</code> &mdash; A signature for "original message" fails when checked against "different message"</li>
-  <li><code>test_VerifyWithAccountRoot</code> &mdash; A Lamport leaf root is proven against the account-level Merkle root with an explicit leaf index and proof</li>
-  <li><code>test_ValidateUserOp_ValidSignature</code> &mdash; The ERC-4337 flow enforces EntryPoint-only validation, nonce checks, and one-time Lamport leaf usage</li>
-  <li><code>test_ValidateUserOp_RejectsReplay</code> &mdash; Replaying the same signed userOp fails once the nonce and next Lamport leaf index advance</li>
-  <li><code>test_GasCost</code> &mdash; Pure verification costs <strong>231,705 gas</strong>. Full <code>validateUserOp</code> costs <strong>753,940 gas</strong> in the current implementation.</li>
+  <li>256 hashes &times; 36 gas = ~9,200 gas for the core verification loop</li>
+  <li>The rest is calldata (8 KB signature at 16 gas/byte = ~130K gas) and Merkle proof checking</li>
+  <li>Total: <span class="gas">~754K gas</span> including Merkle root verification and state updates</li>
 </ul>
 
-<h2 id="ch2-cp">Checkpoint</h2>
-<div class="checkpoint" data-cp="cp-lamport" onclick="toggleCheckpoint(this)">
-  <div class="checkpoint-box"><span class="checkpoint-check">&#10003;</span></div>
-  <div class="checkpoint-text">
-    <div class="checkpoint-label">Checkpoint &mdash; Lamport Tests Pass</div>
-    <div class="checkpoint-desc">You should see: 18 tests passed, 0 failed. Lamport verify: 231,705 gas. LamportAccount validateUserOp: 753,940 gas.</div>
-  </div>
+<h2 id="ch2-core">The Core Verification Loop</h2>
+
+<p>This is the heart of the verifier &mdash; 10 lines that provide quantum resistance:</p>
+
+<pre><code>for (uint256 i = 0; i &lt; 256; i++) {
+    uint256 bit = (uint256(msgHash) &gt;&gt; (255 - i)) &amp; 1;
+    bytes32 computed = keccak256(abi.encodePacked(signature[i]));
+    bytes32 expected = pubKeyHashes[2 * i + bit];
+    if (computed != expected) return false;
+}
+return true;</code></pre>
+
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/lamport/LamportVerifier.sol">src/lamport/LamportVerifier.sol</a> &mdash; full verifier with Merkle root + leaf proof support</p>
+
+<h2 id="ch2-account">The Smart Account</h2>
+
+<p><code>LamportAccount</code> wraps the verifier into an ERC-4337 account. Key design decisions:</p>
+
+<ul>
+  <li><strong>EntryPoint enforcement:</strong> Only the ERC-4337 EntryPoint can call <code>validateUserOp</code></li>
+  <li><strong>Nonce + leaf index tracking:</strong> Prevents replay attacks and ensures each Lamport key is used exactly once</li>
+  <li><strong>Merkle proof per leaf:</strong> The signature includes a proof that this leaf belongs to the account's key tree</li>
+  <li><strong>Owner-gated execute:</strong> Only the owner or EntryPoint can call <code>execute()</code></li>
+</ul>
+
+<pre><code>function validateUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
+    external override returns (uint256)
+{
+    if (msg.sender != entryPoint) revert OnlyEntryPoint();
+    if (userOp.nonce != nonce) return SIG_VALIDATION_FAILED;
+
+    // Decode: 512 pub hashes + 256 preimages + leaf index + Merkle proof
+    (bytes32[512] memory pubKeyHashes, bytes32[256] memory lamportSig,
+     uint256 leafIndex, bytes32[] memory merkleProof)
+        = abi.decode(userOp.signature, (bytes32[512], bytes32[256], uint256, bytes32[]));
+
+    if (leafIndex != nextKeyIndex) return SIG_VALIDATION_FAILED;
+
+    bool valid = verifier.verifyWithRoot(userOpHash, publicKeyRoot, pubKeyHashes, lamportSig, leafIndex, merkleProof);
+    if (!valid) return SIG_VALIDATION_FAILED;
+
+    nextKeyIndex++;
+    nonce++;
+    return 0;
+}</code></pre>
+
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/lamport/LamportAccount.sol">src/lamport/LamportAccount.sol</a> &mdash; full account contract</p>
+
+<h2 id="ch2-run">Build and Test</h2>
+
+<div class="steps">
+<div class="step"><h3>Clone and install</h3>
+<pre><code>git clone https://github.com/LimeChain/pqc-evm-tutorial.git
+cd pqc-evm-tutorial
+git submodule update --init --recursive
+forge build</code></pre>
+<p>Expected: <code>Compiler run successful!</code></p>
 </div>
 
-</section>
+<div class="step"><h3>Run Lamport tests</h3>
+<pre><code>forge test --match-path "test/lamport/*" -vv</code></pre>
+<p>Expected: all tests pass. Key numbers:</p>
+<ul>
+  <li><code>Lamport verify gas: 231,705</code> (pure verification, no Merkle)</li>
+  <li><code>LamportAccount validateUserOp gas: ~754K</code> (full flow with Merkle proof)</li>
+</ul>
+</div>
 
-<!-- ============================================================
+<div class="step"><h3>What the tests prove</h3>
+<ul>
+  <li><strong>Valid signature verifies</strong> &mdash; 256 correct preimages match 512 public key hashes</li>
+  <li><strong>Corrupted preimage fails</strong> &mdash; flipping one bit causes rejection</li>
+  <li><strong>Wrong message fails</strong> &mdash; signature for message A fails against message B</li>
+  <li><strong>Replay rejected</strong> &mdash; same signature fails on second use (nonce advances)</li>
+  <li><strong>Wrong leaf index fails</strong> &mdash; can't skip ahead or reuse a consumed leaf</li>
+  <li><strong>Non-EntryPoint caller reverts</strong> &mdash; only the EntryPoint can trigger validation</li>
+</ul>
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/test/lamport/LamportVerifier.t.sol">test/lamport/LamportVerifier.t.sol</a> &nbsp;|&nbsp; <a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/test/lamport/LamportAccount.t.sol">test/lamport/LamportAccount.t.sol</a></p>
+</div>
+</div>
+
+<!-- ================================================================
      CHAPTER 3
-     ============================================================ -->
-<section class="chapter" id="ch3">
-<span class="chapter-label">Chapter 3</span>
-<h1>Production PQC &mdash; Falcon-512 with ETHFALCON</h1>
-<p class="chapter-subtitle">Lattice-based signatures, compact enough for real account-abstraction experiments</p>
+     ================================================================ -->
+<h1 id="ch3">Chapter 3: Falcon-512 with ETHFALCON</h1>
 
-<h2 id="ch3-what">What is Falcon-512?</h2>
+<p>Lamport proves the concept; Falcon is production-grade. <a href="https://falcon-sign.info/">Falcon-512</a> (NIST FIPS 206) is a lattice-based signature scheme with the <strong>smallest signatures</strong> among NIST PQC standards &mdash; just 666 bytes vs 2,420 for Dilithium.</p>
 
-<p>Falcon (Fast-Fourier Lattice-based Compact Signatures over NTRU) is a compact lattice-based digital signature scheme built on the hardness of NTRU-style problems and related short-vector assumptions. NIST selected Falcon for additional post-quantum standardization work, but it is separate from the first published PQC FIPS set.</p>
+<h2 id="ch3-why">Why Falcon Wins on EVM</h2>
 
-<p>Key properties of Falcon-512:</p>
-<ul>
-  <li><strong>Signature size</strong>: ~666 bytes (the most compact of the NIST PQC signatures)</li>
-  <li><strong>Public key size</strong>: ~897 bytes (stored in NTT domain for efficient verification)</li>
-  <li><strong>Security level</strong>: NIST Level 1 (equivalent to AES-128)</li>
-  <li><strong>Signing</strong>: Uses discrete Gaussian sampling over NTRU lattices</li>
-  <li><strong>Verification</strong>: NTT-based polynomial arithmetic + hash checks</li>
-</ul>
-
-<h3>ZKNox's ETHFALCON Optimization</h3>
-
-<p><a href="https://github.com/ZKNoxHQ/ETHFALCON">ETHFALCON</a> by ZKNox is the first production EVM implementation of Falcon-512 verification. Their key optimization: replacing SHAKE-256 (the hash function in standard Falcon) with <strong>Keccak-256</strong>, which is a native EVM opcode. This single change eliminates the enormous gas overhead of simulating SHAKE in Solidity.</p>
-
-<p>The result: Falcon signature verification in approximately <strong>1.5 million gas</strong>. Expensive compared to ECDSA's 3,000 gas, but functional on any EVM chain today. The public key is stored using <strong>SSTORE2</strong> (storing data as contract bytecode) to reduce storage costs.</p>
-
-<div class="callout callout-info">
-  <div class="callout-title">Interface: ISigVerifier</div>
-  ETHFALCON exposes a simple interface: <code>setKey(bytes)</code> stores a public key and returns an SSTORE2 pointer. <code>verify(bytes, bytes32, bytes)</code> checks a signature against a stored key and returns a success selector. Our FalconAccount wraps this interface into the ERC-4337 flow.
-</div>
-
-<h2 id="ch3-account">FalconAccount.sol</h2>
-
-<div class="code-block-wrapper">
-  <div class="code-block-header">
-    <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/falcon/FalconAccount.sol" target="_blank" rel="noopener">src/falcon/FalconAccount.sol</a>
-    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-  </div>
-  <pre><code>// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
-
-import {IAccount, UserOperation} from &quot;../interfaces/IAccount.sol&quot;;
-import {ISigVerifier} from &quot;InterfaceVerifier/IVerifier.sol&quot;;
-
-/// @title FalconAccount — Quantum-resistant smart account using Falcon-512 (ETHFALCON)
-/// @notice ERC-4337 compatible account that verifies Falcon-512 lattice-based signatures.
-///         Uses ZKNox&#x27;s ETHFALCON variant (Keccak instead of SHAKE) for ~1.5M gas verification.
-///
-/// Architecture:
-///   - Public key (897 bytes in NTT domain) is stored at account creation
-///   - Off-chain signer generates Falcon-512 signatures
-///   - validateUserOp calls ETHFALCON.verify() to check the signature
-///   - Gas cost: ~1.5M per verification (vs 3,000 for ECDSA)
-contract FalconAccount is IAccount {
-    ISigVerifier public immutable falconVerifier;
-    address public immutable entryPoint;
-    address public owner;
-    uint256 public nonce;
-
-    // Falcon public key stored as SSTORE2 pointer (returned from setKey)
-    bytes public storedPubKeyPointer;
-
-    // The raw public key data for reference
-    bytes public rawPublicKey;
-
-    uint256 internal constant SIG_VALIDATION_FAILED = 1;
-
-    event Executed(address indexed target, uint256 value, bytes data);
-    event PublicKeyUpdated();
-
-    error OnlyEntryPoint();
-    error OnlyOwner();
-    error ExecutionFailed();
-    error PublicKeyNotSet();
-
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert OnlyOwner();
-        _;
-    }
-
-    // ISigVerifier.verify.selector = bytes4(keccak256(&quot;verify(bytes,bytes32,bytes)&quot;))
-    bytes4 internal constant VERIFY_SUCCESS = 0x024ad318;
-
-    constructor(address _falconVerifier, bytes memory _publicKey, address _entryPoint, address _owner) {
-        falconVerifier = ISigVerifier(_falconVerifier);
-        entryPoint = _entryPoint;
-        owner = _owner;
-
-        // Store the public key via ETHFALCON&#x27;s setKey (uses SSTORE2)
-        if (_publicKey.length &gt; 0) {
-            storedPubKeyPointer = falconVerifier.setKey(_publicKey);
-            rawPublicKey = _publicKey;
-        }
-    }
-
-    /// @notice ERC-4337 signature validation using Falcon-512
-    /// @dev Signature format: raw Falcon signature bytes (salt + s2 encoded)
-    ///      The public key is read from the stored SSTORE2 pointer
-    function validateUserOp(
-        UserOperation calldata userOp,
-        bytes32 userOpHash,
-        uint256 missingAccountFunds
-    ) external override returns (uint256 validationData) {
-        if (msg.sender != entryPoint) revert OnlyEntryPoint();
-        if (storedPubKeyPointer.length == 0) revert PublicKeyNotSet();
-        if (userOp.sender != address(this) || userOp.nonce != nonce) {
-            return SIG_VALIDATION_FAILED;
-        }
-
-        bytes4 result = falconVerifier.verify(
-            storedPubKeyPointer,
-            userOpHash,
-            userOp.signature
-        );
-
-        if (result != VERIFY_SUCCESS) {
-            return SIG_VALIDATION_FAILED;
-        }
-
-        nonce++;
-
-        if (missingAccountFunds &gt; 0) {
-            (bool success,) = payable(entryPoint).call{value: missingAccountFunds}(&quot;&quot;);
-            (success);
-        }
-
-        return 0;
-    }
-
-    error OnlyEntryPointOrOwner();
-
-    /// @notice Execute a call from this account (only owner or EntryPoint after validation)
-    function execute(address target, uint256 value, bytes calldata data) external {
-        if (msg.sender != owner &amp;&amp; msg.sender != entryPoint) revert OnlyEntryPointOrOwner();
-        (bool success,) = target.call{value: value}(data);
-        if (!success) revert ExecutionFailed();
-        emit Executed(target, value, data);
-    }
-
-    /// @notice Update the Falcon public key
-    function updatePublicKey(bytes memory newKey) external onlyOwner {
-        storedPubKeyPointer = falconVerifier.setKey(newKey);
-        rawPublicKey = newKey;
-        emit PublicKeyUpdated();
-    }
-
-    receive() external payable {}
-}
-</code></pre>
-</div>
-
-<h2 id="ch3-tests">Tests with Mock Verifier</h2>
-<p>Since real Falcon signature generation requires an off-chain Python signer, the tests use a mock verifier that lets us exercise the account contract logic independently.</p>
-
-<div class="collapsible" id="col-falcon-test">
-  <button class="collapsible-toggle" onclick="toggleCollapsible('col-falcon-test')">
-    <span class="collapsible-arrow">&#9654;</span>
-    test/falcon/FalconAccount.t.sol &mdash; Full test suite (144 lines)
-  </button>
-  <div class="collapsible-body">
-    <div class="code-block-wrapper">
-      <div class="code-block-header">
-        <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/test/falcon/FalconAccount.t.sol" target="_blank" rel="noopener">test/falcon/FalconAccount.t.sol</a>
-        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-      </div>
-      <pre><code>// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
-
-import &quot;forge-std/Test.sol&quot;;
-import &quot;../../src/falcon/FalconAccount.sol&quot;;
-import &quot;../../src/interfaces/IAccount.sol&quot;;
-import {ISigVerifier} from &quot;InterfaceVerifier/IVerifier.sol&quot;;
-
-contract MockFalconVerifier is ISigVerifier {
-    bool public shouldPass = true;
-
-    function setShouldPass(bool _pass) external {
-        shouldPass = _pass;
-    }
-
-    function setKey(bytes calldata) external pure returns (bytes memory) {
-        return abi.encodePacked(address(0x1234567890123456789012345678901234567890));
-    }
-
-    function verify(bytes calldata, bytes32, bytes calldata)
-        external
-        view
-        returns (bytes4)
-    {
-        if (shouldPass) {
-            return ISigVerifier.verify.selector;
-        }
-        return 0xFFFFFFFF;
-    }
-}
-
-contract FalconAccountTest is Test {
-    MockFalconVerifier public mockVerifier;
-    FalconAccount public account;
-
-    address internal constant OWNER = address(0xBEEF);
-
-    function setUp() public {
-        mockVerifier = new MockFalconVerifier();
-        account = new FalconAccount(address(mockVerifier), hex&quot;DEADBEEF&quot;, address(this), OWNER);
-        vm.deal(address(account), 10 ether);
-    }
-
-    function test_ValidateUserOp_ValidSignature() public {
-        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 0);
-        bytes32 userOpHash = keccak256(&quot;test-falcon-op&quot;);
-
-        uint256 result = account.validateUserOp(userOp, userOpHash, 0);
-        assertEq(result, 0, &quot;Valid signature should return 0&quot;);
-        assertEq(account.nonce(), 1, &quot;Nonce should increment&quot;);
-    }
-
-    function test_ValidateUserOp_InvalidSignature() public {
-        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 0);
-        bytes32 userOpHash = keccak256(&quot;test-falcon-op&quot;);
-
-        mockVerifier.setShouldPass(false);
-
-        uint256 result = account.validateUserOp(userOp, userOpHash, 0);
-        assertEq(result, 1, &quot;Invalid signature should return SIG_VALIDATION_FAILED&quot;);
-        assertEq(account.nonce(), 0, &quot;Nonce should NOT increment&quot;);
-    }
-
-    function test_ValidateUserOp_RejectsReplay() public {
-        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 0);
-        bytes32 userOpHash = keccak256(&quot;test-falcon-op&quot;);
-        uint256 balanceBefore = address(this).balance;
-
-        uint256 firstResult = account.validateUserOp(userOp, userOpHash, 0.1 ether);
-        uint256 secondResult = account.validateUserOp(userOp, userOpHash, 0.1 ether);
-
-        assertEq(firstResult, 0, &quot;First validation should pass&quot;);
-        assertEq(secondResult, 1, &quot;Replay should fail once nonce advances&quot;);
-        assertEq(account.nonce(), 1, &quot;Nonce should only increment once&quot;);
-        assertEq(address(this).balance - balanceBefore, 0.1 ether, &quot;EntryPoint should only receive one prefund payment&quot;);
-    }
-
-    function test_ValidateUserOp_RejectsWrongNonce() public {
-        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 9);
-        bytes32 userOpHash = keccak256(&quot;test-falcon-op&quot;);
-
-        uint256 result = account.validateUserOp(userOp, userOpHash, 0);
-        assertEq(result, 1, &quot;Wrong nonce should fail&quot;);
-    }
-
-    function test_ValidateUserOp_RevertsForNonEntryPoint() public {
-        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 0);
-        bytes32 userOpHash = keccak256(&quot;test-falcon-op&quot;);
-
-        vm.prank(address(0xCAFE));
-        vm.expectRevert(FalconAccount.OnlyEntryPoint.selector);
-        account.validateUserOp(userOp, userOpHash, 0);
-    }
-
-    function test_Execute_AsOwner() public {
-        vm.prank(OWNER);
-        account.execute(address(0xCAFE), 1 ether, &quot;&quot;);
-        assertEq(address(0xCAFE).balance, 1 ether);
-    }
-
-    function test_Execute_AsEntryPoint() public {
-        account.execute(address(0xCAFE), 1 ether, &quot;&quot;);
-        assertEq(address(0xCAFE).balance, 1 ether);
-    }
-
-    function test_UpdatePublicKey_OnlyOwner() public {
-        vm.prank(OWNER);
-        account.updatePublicKey(hex&quot;AABBCCDD&quot;);
-
-        vm.prank(address(0xDEAD));
-        vm.expectRevert(FalconAccount.OnlyOwner.selector);
-        account.updatePublicKey(hex&quot;EEEE&quot;);
-    }
-
-    function test_PublicKeyStored() public view {
-        bytes memory stored = account.storedPubKeyPointer();
-        assertTrue(stored.length &gt; 0, &quot;Public key pointer should be stored&quot;);
-    }
-
-    function test_ValidatePaysFunds() public {
-        UserOperation memory userOp = _buildUserOp(hex&quot;CAFEBABE&quot;, 0);
-        bytes32 userOpHash = keccak256(&quot;pay-test&quot;);
-
-        uint256 balBefore = address(this).balance;
-        account.validateUserOp(userOp, userOpHash, 0.1 ether);
-        assertEq(address(this).balance - balBefore, 0.1 ether, &quot;Should pay missingAccountFunds&quot;);
-    }
-
-    function _buildUserOp(bytes memory sig, uint256 userNonce) internal view returns (UserOperation memory) {
-        return UserOperation({
-            sender: address(account),
-            nonce: userNonce,
-            callData: &quot;&quot;,
-            callGasLimit: 100000,
-            verificationGasLimit: 5000000,
-            preVerificationGas: 50000,
-            maxFeePerGas: 1 gwei,
-            maxPriorityFeePerGas: 1 gwei,
-            signature: sig
-        });
-    }
-
-    receive() external payable {}
-}
-</code></pre>
-    </div>
-  </div>
-</div>
-
-<h2 id="ch3-steps">Step by Step: Test the Falcon Account</h2>
-
-<h3>Step 1: Run the Falcon tests</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>forge test --match-path "test/falcon/*" -vv</code></pre>
-</div>
-<p><strong>Expected output (10 tests, all PASS):</strong></p>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">output</span></div>
-  <pre><code>[PASS] test_Execute_AsEntryPoint()
-[PASS] test_Execute_AsOwner()
-[PASS] test_PublicKeyStored()
-[PASS] test_ValidateUserOp_RejectsReplay()
-[PASS] test_ValidateUserOp_RevertsForNonEntryPoint()
-10 tests passed, 0 failed</code></pre>
-</div>
-
-<p><strong>What the tests prove:</strong></p>
-<ul>
-  <li><code>test_ValidateUserOp_ValidSignature</code> &mdash; When the Falcon verifier returns the success selector (<code>0x024ad318</code>), validateUserOp returns 0 and increments the nonce</li>
-  <li><code>test_ValidateUserOp_InvalidSignature</code> &mdash; When verification fails, returns 1 (SIG_VALIDATION_FAILED) and does NOT increment the nonce</li>
-  <li><code>test_PublicKeyStored</code> &mdash; The constructor calls <code>falconVerifier.setKey()</code> which stores the public key via SSTORE2 and returns a pointer</li>
-  <li><code>test_UpdatePublicKey_OnlyOwner</code> &mdash; Only the account owner can rotate the Falcon public key</li>
-  <li><code>test_ValidatePaysFunds</code> &mdash; When <code>missingAccountFunds &gt; 0</code>, the account pays the EntryPoint (required by ERC-4337)</li>
-</ul>
-
-<div class="callout callout-warn">
-  <div class="callout-title">Mock Verifier vs Real ETHFALCON</div>
-  These tests use a <code>MockFalconVerifier</code> to test the account contract logic independently of ZKNox's verification code. The mock returns success or failure on demand. To test with <strong>real Falcon-512 signatures</strong>, you need the ZKNox Python signer (<code>sign_cli.py</code>) to generate keypairs and signatures off-chain, then pass them to the real <code>ZKNOX_ethfalcon</code> contract. The ZKNox repo includes its own tests that do exactly this.
-</div>
-
-<h3>Step 2: Run all 33 tests together</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>forge test -vv</code></pre>
-</div>
-<p><strong>Expected output:</strong></p>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">output</span></div>
-  <pre><code>Ran 4 test suites: 33 tests passed, 0 failed, 0 skipped</code></pre>
-</div>
-
-<h2 id="ch3-cp">Checkpoint</h2>
-<div class="checkpoint" data-cp="cp-falcon" onclick="toggleCheckpoint(this)">
-  <div class="checkpoint-box"><span class="checkpoint-check">&#10003;</span></div>
-  <div class="checkpoint-text">
-    <div class="checkpoint-label">Checkpoint &mdash; All 33 Tests Pass</div>
-    <div class="checkpoint-desc">Lamport (18 tests) + Falcon (10 tests) + Factory (5 tests) = 33 passed, 0 failed.</div>
-  </div>
-</div>
-
-</section>
-
-<!-- ============================================================
-     CHAPTER 4
-     ============================================================ -->
-<section class="chapter" id="ch4">
-<span class="chapter-label">Chapter 4</span>
-<h1>Deploy to Base Sepolia</h1>
-<p class="chapter-subtitle">Factory pattern, deterministic addresses, live deployment</p>
-
-<h2 id="ch4-factory">PQCAccountFactory.sol</h2>
-<p>The factory uses <code>CREATE2</code> for deterministic account addresses. Given the same salt and parameters, the account address is predictable before deployment &mdash; essential for counterfactual accounts in ERC-4337.</p>
-
-<div class="code-block-wrapper">
-  <div class="code-block-header">
-    <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/factory/PQCAccountFactory.sol" target="_blank" rel="noopener">src/factory/PQCAccountFactory.sol</a>
-    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-  </div>
-  <pre><code>// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
-
-import {LamportVerifier} from &quot;../lamport/LamportVerifier.sol&quot;;
-import {LamportAccount} from &quot;../lamport/LamportAccount.sol&quot;;
-import {FalconAccount} from &quot;../falcon/FalconAccount.sol&quot;;
-
-/// @title PQCAccountFactory — Deploys quantum-resistant smart accounts
-/// @notice CREATE2 factory for deterministic account addresses.
-///         Supports both Lamport (hash-based) and Falcon (lattice-based) accounts.
-contract PQCAccountFactory {
-    LamportVerifier public immutable lamportVerifier;
-    address public immutable falconVerifierAddress;
-    address public immutable entryPoint;
-
-    event LamportAccountCreated(address indexed account, address indexed owner);
-    event FalconAccountCreated(address indexed account, address indexed owner);
-
-    constructor(address _lamportVerifier, address _falconVerifier, address _entryPoint) {
-        lamportVerifier = LamportVerifier(_lamportVerifier);
-        falconVerifierAddress = _falconVerifier;
-        entryPoint = _entryPoint;
-    }
-
-    /// @notice Deploy a new Lamport smart account
-    /// @param pubKeyRoot Merkle root of the Lamport leaf roots registered on the account
-    /// @param owner The account owner (can rotate keys)
-    /// @param salt For deterministic CREATE2 address
-    function createLamportAccount(
-        bytes32 pubKeyRoot,
-        address owner,
-        uint256 salt
-    ) external returns (LamportAccount account) {
-        account = new LamportAccount{salt: bytes32(salt)}(
-            address(lamportVerifier),
-            pubKeyRoot,
-            entryPoint,
-            owner
-        );
-        emit LamportAccountCreated(address(account), owner);
-    }
-
-    /// @notice Deploy a new Falcon-512 smart account
-    /// @param publicKey The Falcon-512 public key (NTT domain, ~897 bytes)
-    /// @param owner The account owner
-    /// @param salt For deterministic CREATE2 address
-    function createFalconAccount(
-        bytes memory publicKey,
-        address owner,
-        uint256 salt
-    ) external returns (FalconAccount account) {
-        account = new FalconAccount{salt: bytes32(salt)}(
-            falconVerifierAddress,
-            publicKey,
-            entryPoint,
-            owner
-        );
-        emit FalconAccountCreated(address(account), owner);
-    }
-
-    /// @notice Compute the deterministic address of a Lamport account
-    function getLamportAccountAddress(
-        bytes32 pubKeyRoot,
-        address owner,
-        uint256 salt
-    ) external view returns (address) {
-        bytes32 hash = keccak256(
-            abi.encodePacked(
-                bytes1(0xff),
-                address(this),
-                bytes32(salt),
-                keccak256(
-                    abi.encodePacked(
-                        type(LamportAccount).creationCode,
-                        abi.encode(address(lamportVerifier), pubKeyRoot, entryPoint, owner)
-                    )
-                )
-            )
-        );
-        return address(uint160(uint256(hash)));
-    }
-}
-</code></pre>
-</div>
-
-<h2 id="ch4-script">DeployFactory.s.sol</h2>
-
-<div class="code-block-wrapper">
-  <div class="code-block-header">
-    <a class="code-block-file" href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/script/DeployFactory.s.sol" target="_blank" rel="noopener">script/DeployFactory.s.sol</a>
-    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-  </div>
-  <pre><code>// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.34;
-
-import &quot;forge-std/Script.sol&quot;;
-import &quot;../src/lamport/LamportVerifier.sol&quot;;
-import &quot;../src/factory/PQCAccountFactory.sol&quot;;
-
-/// @notice Deploy the full PQC account stack to Base Sepolia
-/// @dev Run: forge script script/DeployFactory.s.sol --rpc-url base_sepolia --broadcast
-///
-/// Prerequisites:
-///   - Set PRIVATE_KEY env var
-///   - Set BASE_SEPOLIA_RPC_URL in .env
-///   - Set FALCON_VERIFIER_ADDRESS env var (address of deployed ETHFALCON verifier)
-///     If not set, deploys without Falcon support (Lamport only)
-contract DeployFactory is Script {
-    address internal constant DEFAULT_ENTRY_POINT = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
-
-    function run() external {
-        uint256 deployerPrivateKey = vm.envUint(&quot;PRIVATE_KEY&quot;);
-        vm.startBroadcast(deployerPrivateKey);
-
-        // 1. Deploy Lamport Verifier
-        LamportVerifier lamportVerifier = new LamportVerifier();
-        console.log(&quot;LamportVerifier:&quot;, address(lamportVerifier));
-
-        // 2. Get or skip Falcon verifier address
-        address falconVerifier = vm.envOr(&quot;FALCON_VERIFIER_ADDRESS&quot;, address(0));
-        if (falconVerifier == address(0)) {
-            console.log(&quot;No FALCON_VERIFIER_ADDRESS set - deploying Lamport-only factory&quot;);
-        } else {
-            console.log(&quot;FalconVerifier:&quot;, falconVerifier);
-        }
-
-        address entryPoint = vm.envOr(&quot;ENTRY_POINT_ADDRESS&quot;, DEFAULT_ENTRY_POINT);
-        console.log(&quot;EntryPoint:&quot;, entryPoint);
-
-        // 3. Deploy Factory
-        PQCAccountFactory factory = new PQCAccountFactory(
-            address(lamportVerifier),
-            falconVerifier,
-            entryPoint
-        );
-        console.log(&quot;PQCAccountFactory:&quot;, address(factory));
-
-        vm.stopBroadcast();
-    }
-}
-</code></pre>
-</div>
-
-<h2 id="ch4-deploy">Step by Step: Deploy to Base Sepolia</h2>
-
-<h3>Step 1: Get Base Sepolia ETH</h3>
-<p>You need test ETH to deploy contracts. Get it from one of these faucets:</p>
-<ul>
-  <li><a href="https://www.base.org/faucet" target="_blank" rel="noopener">base.org/faucet</a> (requires Coinbase verification)</li>
-  <li><a href="https://www.alchemy.com/faucets/base-sepolia" target="_blank" rel="noopener">Alchemy Base Sepolia faucet</a> (free, requires account)</li>
-</ul>
-
-<h3>Step 2: Set environment variables</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code><span class="cmt"># Your deployer wallet's private key (NEVER use a mainnet key)</span>
-export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-
-<span class="cmt"># Base Sepolia RPC (public endpoint, or use Alchemy/Infura for reliability)</span>
-export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org</code></pre>
-</div>
-
-<h3>Step 3: Dry-run the deployment (no broadcast)</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>forge script script/DeployFactory.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL</code></pre>
-</div>
-<p><strong>Expected output:</strong></p>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">output</span></div>
-  <pre><code>Script ran successfully.
-
-== Logs ==
-  LamportVerifier: 0x...
-  No FALCON_VERIFIER_ADDRESS set - deploying Lamport-only factory
-  EntryPoint: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
-  PQCAccountFactory: 0x...</code></pre>
-</div>
-
-<h3>Step 4: Deploy for real (with --broadcast)</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>forge script script/DeployFactory.s.sol \
-  --rpc-url $BASE_SEPOLIA_RPC_URL \
-  --broadcast</code></pre>
-</div>
-<p><strong>What gets deployed (2 contracts):</strong></p>
-<ol>
-  <li><strong>LamportVerifier</strong> &mdash; The pure keccak256 signature verification library. Stateless, called by LamportAccount.</li>
-  <li><strong>PQCAccountFactory</strong> &mdash; The CREATE2 factory. Takes the LamportVerifier, Falcon verifier, and EntryPoint addresses as constructor arguments and deploys LamportAccount or FalconAccount instances.</li>
-</ol>
-<p>Save the contract addresses from the output &mdash; you'll need them to create accounts.</p>
-
-<h3>Step 5: Verify on BaseScan (optional)</h3>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code><span class="cmt"># Verify LamportVerifier source code on BaseScan</span>
-forge verify-contract &lt;LAMPORT_VERIFIER_ADDRESS&gt; \
-  src/lamport/LamportVerifier.sol:LamportVerifier \
-  --chain base-sepolia \
-  --etherscan-api-key $BASESCAN_API_KEY</code></pre>
-</div>
-
-<h3>Step 6 (Optional): Deploy with Falcon support</h3>
-<p>If you also deploy the ETHFALCON verifier (from the ZKNox repo), pass its address:</p>
-<div class="code-block-wrapper">
-  <div class="code-block-header"><span class="code-block-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-  <pre><code>export FALCON_VERIFIER_ADDRESS=0x...your_ethfalcon_address...
-
-forge script script/DeployFactory.s.sol \
-  --rpc-url $BASE_SEPOLIA_RPC_URL \
-  --broadcast</code></pre>
-</div>
-<p>Now the factory can deploy both Lamport and Falcon accounts.</p>
-
-<h2 id="ch4-cp">Checkpoint</h2>
-<div class="checkpoint" data-cp="cp-deploy" onclick="toggleCheckpoint(this)">
-  <div class="checkpoint-box"><span class="checkpoint-check">&#10003;</span></div>
-  <div class="checkpoint-text">
-    <div class="checkpoint-label">Checkpoint &mdash; Contracts Live on Base Sepolia</div>
-    <div class="checkpoint-desc">LamportVerifier and PQCAccountFactory deployed. You have contract addresses. Optional: verified on BaseScan.</div>
-  </div>
-</div>
-
-</section>
-
-<!-- ============================================================
-     CHAPTER 5
-     ============================================================ -->
-<section class="chapter" id="ch5">
-<span class="chapter-label">Chapter 5</span>
-<h1>What's Next</h1>
-<p class="chapter-subtitle">The road from 1.5M gas to 3,000 gas</p>
-
-<h2 id="ch5-precompile">Path to 3,000 Gas: The Falcon Precompile</h2>
-
-<p>Everything we built in this tutorial is user-space infrastructure for today's EVM. The execution-layer roadmap points toward lower-cost native PQ signature verification support, which could collapse verification costs relative to the current pure-Solidity and ETHFALCON paths.</p>
-
-<p>The integration boundary in this repo is already the right one:</p>
-<ol>
-  <li>The account calls into an external verifier interface</li>
-  <li>The factory chooses which verifier new accounts are wired to</li>
-  <li>A future native verifier can slot in behind that interface without changing the off-chain key material</li>
-</ol>
-
-<p>The exact precompile shape and shipping timeline are still in flux, but the account-abstraction boundary stays useful either way.</p>
-
-<h2 id="ch5-hybrid">Hybrid ECDSA + Falcon During Transition</h2>
-
-<p>The migration to post-quantum security will be gradual. During that transition, a <strong>hybrid signature scheme</strong> is a common strategy:</p>
-
-<ul>
-  <li>Require both an ECDSA signature and a Falcon signature in <code>validateUserOp</code></li>
-  <li>Keep compatibility with today's wallets and operational flows</li>
-  <li>Gain post-quantum protection once the heavier signature path is in place</li>
-  <li>Pay the gas cost of the heavier verifier until native support improves the economics</li>
-</ul>
-
-<p>The trade-off is straightforward: better cryptographic agility now, higher verification cost until the protocol offers cheaper native support.</p>
-
-<h2 id="ch5-naysayer">Naysayer Optimistic Verification</h2>
-
-<p>The most exciting optimization on the horizon is <strong>naysayer verification</strong>, developed by the <a href="https://github.com/pse-team/poqeth">Poqeth</a> team. The core idea: instead of verifying the full signature on-chain, accept it optimistically and let anyone challenge a bad signature within a time window.</p>
-
-<p>How it works:</p>
-<ol>
-  <li>The signature is submitted with a bond</li>
-  <li>Anyone can submit a fraud proof showing the signature is invalid</li>
-  <li>If challenged successfully, the submitter's bond is slashed</li>
-  <li>If the challenge window passes with no fraud proof, the signature is accepted</li>
-</ol>
-
-<p>The on-chain cost drops to approximately <strong>25,000 gas</strong> for any PQC scheme, regardless of the verification complexity. This works for Falcon, Dilithium, STARKs &mdash; anything.</p>
-
-<h2 id="ch5-eip7702">EIP-7702 Delegation for Existing EOAs</h2>
-
-<p>What about the billions of dollars locked in existing Externally Owned Accounts? <strong>EIP-7702</strong> introduces a delegation path that lets an EOA point transaction validation at smart-account logic for a transaction.</p>
-
-<p>This means an existing EOA can:</p>
-<ol>
-  <li>Point its validation to a PQC account contract</li>
-  <li>Sign transactions with a Falcon or Lamport key</li>
-  <li>Keep the same address and balance</li>
-</ol>
-
-<p>No need to migrate funds. No new address. Just attach quantum-resistant signing to your existing account.</p>
-
-<h2 id="ch5-timeline">The Ethereum Foundation PQ Roadmap</h2>
-
-<div class="table-wrapper">
 <table>
-<thead>
-<tr><th>Milestone</th><th>Layer</th><th>Direction</th></tr>
-</thead>
-<tbody>
-<tr><td><strong>I*</strong></td><td>Consensus</td><td>PQ key registry</td></tr>
-<tr><td><strong>J*</strong></td><td>Execution</td><td>PQ signature precompiles / native verification support</td></tr>
-<tr><td><strong>L*</strong></td><td>Consensus + Data</td><td>PQ attestations, real-time CL proofs, leanVM</td></tr>
-<tr><td><strong>M*</strong></td><td>Execution + Data</td><td>PQ signature aggregation, PQ blobs</td></tr>
-<tr><td><strong>Longer term</strong></td><td>All layers</td><td>Full PQ consensus, PQ transactions, PQ sampling</td></tr>
-</tbody>
+<tr><th></th><th>Falcon-512</th><th>Dilithium (ML-DSA-44)</th><th>ECDSA</th></tr>
+<tr><td>Signature</td><td>666 bytes</td><td>2,420 bytes</td><td>65 bytes</td></tr>
+<tr><td>Public key</td><td>897 bytes</td><td>1,312 bytes</td><td>33 bytes</td></tr>
+<tr><td>Gas (Solidity)</td><td><span class="gas">~1.5M</span></td><td>~6M</td><td><span class="gas">3K</span></td></tr>
+<tr><td>Gas (precompile)</td><td>~3K (EIP-8052)</td><td>~3K (EIP-8051)</td><td>3K</td></tr>
+<tr><td>Quantum safe?</td><td><span class="chip chip-yes">Yes</span></td><td><span class="chip chip-yes">Yes</span></td><td><span class="chip chip-no">No</span></td></tr>
 </table>
-</div>
 
-<h2 id="ch5-resources">Resources and Links</h2>
+<h2 id="ch3-ethfalcon">ZKNox's ETHFALCON Optimization</h2>
+
+<p><a href="https://github.com/ZKNoxHQ/ETHFALCON">ETHFALCON</a> by ZKNox (Ethereum Foundation-backed) is the key breakthrough. Standard Falcon uses SHAKE-256 for hashing, which costs ~1M gas to emulate on EVM. ETHFALCON replaces SHAKE with <strong>Keccak-256</strong> (native opcode, 36 gas). Same security, 2.6x cheaper:</p>
 
 <ul>
-  <li><a href="https://pq.ethereum.org" target="_blank" rel="noopener"><strong>pq.ethereum.org</strong></a> &mdash; Ethereum Foundation PQ research hub</li>
-  <li><a href="https://github.com/ZKNoxHQ/ETHFALCON" target="_blank" rel="noopener"><strong>ZKNoxHQ/ETHFALCON</strong></a> &mdash; Falcon-512 EVM verification library</li>
-  <li><a href="https://github.com/pse-team/poqeth" target="_blank" rel="noopener"><strong>poqeth</strong></a> &mdash; Naysayer optimistic PQC verification</li>
-  <li><a href="https://eips.ethereum.org/EIPS/eip-4337" target="_blank" rel="noopener"><strong>ERC-4337</strong></a> &mdash; Account Abstraction specification</li>
-  <li><a href="https://eips.ethereum.org/EIPS/eip-7702" target="_blank" rel="noopener"><strong>EIP-7702</strong></a> &mdash; EOA delegation for smart account migration</li>
-  <li><a href="https://csrc.nist.gov/Projects/Post-Quantum-Cryptography" target="_blank" rel="noopener"><strong>NIST PQC project</strong></a> &mdash; current status of published standards and ongoing Falcon standardization</li>
-  <li><a href="https://csrc.nist.gov/pubs/fips/205/final" target="_blank" rel="noopener"><strong>NIST FIPS 205</strong></a> &mdash; SLH-DSA / SPHINCS+</li>
-  <li><a href="https://csrc.nist.gov/pubs/fips/204/final" target="_blank" rel="noopener"><strong>NIST FIPS 204</strong></a> &mdash; ML-DSA / Dilithium</li>
+  <li>Naive Solidity Falcon: ~24M gas (impractical)</li>
+  <li>ZKNox ETHFALCON: <span class="gas">~1.5M gas</span> (12x improvement via Yul NTT optimization + Keccak swap)</li>
+  <li>Future EIP-8052 precompile: <span class="gas">~3,000 gas</span> (same as ECDSA)</li>
 </ul>
 
-<div class="callout callout-info">
-  <div class="callout-title">You built quantum-resistant Ethereum accounts.</div>
-  What started as a 231K gas Lamport verifier in Chapter 2 is the same pattern that will protect Ethereum when quantum computers arrive. The gas costs will collapse as precompiles ship, but the architecture &mdash; account abstraction + pluggable signature verification &mdash; is the foundation that makes it all work.
+<p>The public key is stored via <strong>SSTORE2</strong> (contract bytecode storage) to minimize gas. Verification calls <code>ISigVerifier.verify(pubkeyPointer, hash, signature)</code> and returns a magic selector on success.</p>
+
+<h2 id="ch3-account">FalconAccount</h2>
+
+<p>The account follows the same pattern as Lamport but calls the ETHFALCON verifier:</p>
+
+<pre><code>bytes4 result = falconVerifier.verify(storedPubKeyPointer, userOpHash, userOp.signature);
+if (result != VERIFY_SUCCESS) return SIG_VALIDATION_FAILED;</code></pre>
+
+<p>Where <code>VERIFY_SUCCESS = 0x024ad318</code> is the <code>ISigVerifier.verify</code> function selector, returned on success per the ZKNox convention.</p>
+
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/falcon/FalconAccount.sol">src/falcon/FalconAccount.sol</a></p>
+
+<div class="callout"><b>Signing happens off-chain</b> Falcon signing uses discrete Gaussian sampling with floating-point arithmetic &mdash; impossible on EVM. The ZKNox Python signer (<code>sign_cli.py</code>) handles key generation and signing. Only <em>verification</em> runs on-chain.</div>
+
+<h2 id="ch3-run">Test It</h2>
+
+<pre><code>forge test --match-path "test/falcon/*" -vv</code></pre>
+
+<p>The tests use a <code>MockFalconVerifier</code> to test account plumbing independently of ZKNox's cryptography. The mock returns success or failure on demand, proving the account correctly handles both cases, pays the EntryPoint, rejects replays, and enforces nonce ordering.</p>
+
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/test/falcon/FalconAccount.t.sol">test/falcon/FalconAccount.t.sol</a></p>
+
+<!-- ================================================================
+     CHAPTER 4
+     ================================================================ -->
+<h1 id="ch4">Chapter 4: Deploy to Base Sepolia</h1>
+
+<h2 id="ch4-factory">The Factory</h2>
+
+<p><code>PQCAccountFactory</code> deploys both account types via CREATE2 for deterministic addresses. Given the same salt, public key, and owner, the account address is predictable before deployment &mdash; essential for counterfactual accounts in ERC-4337.</p>
+
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/factory/PQCAccountFactory.sol">src/factory/PQCAccountFactory.sol</a> &nbsp;|&nbsp; <a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/script/DeployFactory.s.sol">script/DeployFactory.s.sol</a></p>
+
+<h2 id="ch4-deploy">Deploy Step by Step</h2>
+
+<div class="steps">
+<div class="step"><h3>Get Base Sepolia ETH</h3>
+<p><a href="https://www.base.org/faucet">base.org/faucet</a> or <a href="https://www.alchemy.com/faucets/base-sepolia">Alchemy faucet</a></p>
 </div>
 
-</section>
+<div class="step"><h3>Set environment</h3>
+<pre><code>export PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
+export ENTRY_POINT_ADDRESS=0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789</code></pre>
+</div>
 
-</div><!-- .content -->
-</div><!-- .main -->
+<div class="step"><h3>Dry run (no broadcast)</h3>
+<pre><code>forge script script/DeployFactory.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL</code></pre>
+<p>Expected: <code>LamportVerifier: 0x... | PQCAccountFactory: 0x...</code></p>
+</div>
 
-<!-- ============================================================
-     JavaScript
-     ============================================================ -->
-<script>
-// ---- Theme Toggle ----
-function getTheme() {
-  return localStorage.getItem('pqc-book-theme') || 'dark';
-}
+<div class="step"><h3>Deploy for real</h3>
+<pre><code>forge script script/DeployFactory.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast</code></pre>
+<p>This deploys: <strong>LamportVerifier</strong> (stateless verification library) and <strong>PQCAccountFactory</strong> (creates accounts).</p>
+</div>
 
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  var btn = document.getElementById('themeBtn');
-  btn.textContent = theme === 'dark' ? '\u263E' : '\u2600';
-}
+<div class="step"><h3>Verify deployment</h3>
+<pre><code>export VERIFIER_ADDRESS=0x...   # from deploy output
+export FACTORY_ADDRESS=0x...    # from deploy output
 
-function toggleTheme() {
-  var current = getTheme();
-  var next = current === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('pqc-book-theme', next);
-  applyTheme(next);
-}
+forge script script/VerifyDeployment.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL -vvvv</code></pre>
+<p>Runs on-chain: checks code exists, factory references correct verifier, generates a test keypair, signs and verifies a Lamport signature against the live contract.</p>
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/script/VerifyDeployment.s.sol">script/VerifyDeployment.s.sol</a></p>
+</div>
 
-applyTheme(getTheme());
+<div class="step"><h3>Create an account and fund it</h3>
+<pre><code># Generate Merkle root from seed
+PUB_ROOT=$(python3 signer/lamport_signer.py pubroot --seed "my-seed" --leaf-count 16)
 
-// ---- Sidebar Toggle (mobile) ----
-function toggleSidebar() {
-  var sidebar = document.getElementById('sidebar');
-  var overlay = document.getElementById('sidebarOverlay');
-  sidebar.classList.toggle('open');
-  overlay.classList.toggle('open');
-}
+# Create account via factory
+cast send $FACTORY_ADDRESS \
+  "createLamportAccount(bytes32,address,address,uint256)" \
+  $PUB_ROOT $ENTRY_POINT_ADDRESS $YOUR_ADDRESS 0 \
+  --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $PRIVATE_KEY
 
-// Close sidebar on link click (mobile)
-document.querySelectorAll('.toc-link').forEach(function(link) {
-  link.addEventListener('click', function() {
-    if (window.innerWidth <= 900) {
-      document.getElementById('sidebar').classList.remove('open');
-      document.getElementById('sidebarOverlay').classList.remove('open');
-    }
-  });
-});
+# Fund the account
+cast send $ACCOUNT_ADDRESS --value 0.01ether \
+  --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $PRIVATE_KEY</code></pre>
+</div>
 
-// ---- Active TOC Tracking ----
-var tocLinks = document.querySelectorAll('.toc-link[href^="#"]');
-var sections = [];
+<div class="step"><h3>Read account state</h3>
+<pre><code>cast call $ACCOUNT_ADDRESS "publicKeyRoot()(bytes32)" --rpc-url $BASE_SEPOLIA_RPC_URL
+cast call $ACCOUNT_ADDRESS "nextKeyIndex()(uint256)" --rpc-url $BASE_SEPOLIA_RPC_URL
+cast call $ACCOUNT_ADDRESS "owner()(address)" --rpc-url $BASE_SEPOLIA_RPC_URL
+cast call $ACCOUNT_ADDRESS "nonce()(uint256)" --rpc-url $BASE_SEPOLIA_RPC_URL</code></pre>
+</div>
+</div>
 
-tocLinks.forEach(function(link) {
-  var id = link.getAttribute('href').slice(1);
-  var el = document.getElementById(id);
-  if (el) sections.push({ id: id, el: el, link: link });
-});
+<h2 id="ch4-signer">The Python Signer</h2>
 
-function updateActiveToc() {
-  var scrollTop = window.scrollY + 100;
-  var active = null;
+<p>PQC signing is off-chain. The signer uses real <strong>Keccak-256</strong> (via pycryptodome), matching the EVM's <code>keccak256</code> opcode exactly. Key derivation matches the Solidity test helpers: <code>keccak256(abi.encodePacked(seed, uint256(index)))</code>.</p>
 
-  for (var i = sections.length - 1; i >= 0; i--) {
-    if (sections[i].el.offsetTop <= scrollTop) {
-      active = sections[i];
-      break;
-    }
-  }
+<pre><code># Install
+pip install pycryptodome
 
-  tocLinks.forEach(function(l) { l.classList.remove('active'); });
-  if (active) active.link.classList.add('active');
-}
+# Generate account tree (16 Lamport leaves = 16 transactions before rotation)
+python3 signer/lamport_signer.py genkeys --seed "my-seed" --leaf-count 16
 
-// ---- Progress Tracking ----
-function updateProgress() {
-  var scrollTop = window.scrollY;
-  var docHeight = document.documentElement.scrollHeight - window.innerHeight;
-  var pct = docHeight > 0 ? Math.min(100, Math.round((scrollTop / docHeight) * 100)) : 0;
-  document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progressText').textContent = pct + '%';
-}
+# Get Merkle root for account creation
+python3 signer/lamport_signer.py pubroot --seed "my-seed" --leaf-count 16
 
-var scrollTick = false;
-window.addEventListener('scroll', function() {
-  if (!scrollTick) {
-    requestAnimationFrame(function() {
-      updateActiveToc();
-      updateProgress();
-      scrollTick = false;
-    });
-    scrollTick = true;
-  }
-});
+# Sign a userOpHash with leaf 0
+python3 signer/lamport_signer.py sign \
+  --seed "my-seed" --leaf-count 16 --leaf-index 0 \
+  --message "0xabcdef..."</code></pre>
 
-updateActiveToc();
-updateProgress();
+<p>Output: JSON with <code>public_key_hashes</code> (512), <code>signature</code> (256 preimages), <code>leaf_index</code>, and <code>merkle_proof</code> &mdash; everything needed for <code>userOp.signature</code>.</p>
 
-// ---- Copy to Clipboard ----
-function copyCode(btn) {
-  var wrapper = btn.closest('.code-block-wrapper') || btn.closest('.collapsible-body');
-  if (!wrapper) {
-    wrapper = btn.parentElement.parentElement;
-  }
-  var pre = wrapper.querySelector('pre');
-  if (!pre) return;
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/signer/lamport_signer.py">signer/lamport_signer.py</a></p>
 
-  var text = pre.textContent;
-  navigator.clipboard.writeText(text).then(function() {
-    btn.textContent = 'Copied!';
-    btn.classList.add('copied');
-    setTimeout(function() {
-      btn.textContent = 'Copy';
-      btn.classList.remove('copied');
-    }, 2000);
-  }).catch(function() {
-    btn.textContent = 'Failed';
-    setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
-  });
-}
+<h2 id="ch4-keys">Private Key Storage</h2>
 
-// ---- Collapsible Sections ----
-function toggleCollapsible(id) {
-  var el = document.getElementById(id);
-  el.classList.toggle('open');
-}
+<table>
+<tr><th>Key Type</th><th>Size</th><th>How to Store</th></tr>
+<tr><td>Lamport seed</td><td>32 bytes</td><td>Single seed derives everything. Encrypt with AES-256-GCM or store in env var.</td></tr>
+<tr><td>Falcon-512 secret key</td><td>1,281 bytes</td><td>Store encrypted. Generated via ZKNox Python signer.</td></tr>
+</table>
 
-// ---- Checkpoints ----
-function getCheckpoints() {
-  try {
-    return JSON.parse(localStorage.getItem('pqc-book-checkpoints') || '{}');
-  } catch(e) { return {}; }
-}
+<p>The seed is the <strong>only secret</strong>. Each Lamport leaf is derived deterministically. Track <code>nextKeyIndex</code> to avoid reuse &mdash; the contract enforces this on-chain.</p>
 
-function saveCheckpoints(cps) {
-  localStorage.setItem('pqc-book-checkpoints', JSON.stringify(cps));
-}
+<!-- ================================================================
+     CHAPTER 5
+     ================================================================ -->
+<h1 id="ch5">Chapter 5: What's Next</h1>
 
-function toggleCheckpoint(el) {
-  var cpId = el.getAttribute('data-cp');
-  var cps = getCheckpoints();
-  cps[cpId] = !cps[cpId];
-  saveCheckpoints(cps);
-  renderCheckpoints();
-}
+<h2 id="ch5-precompile">Path to 3,000 Gas</h2>
 
-function renderCheckpoints() {
-  var cps = getCheckpoints();
+<p><strong>EIP-8052</strong> proposes a native Falcon precompile: 1,000 gas for hash-to-point + 2,000 gas for core verification = <strong>3,000 gas total</strong> &mdash; the same as ECDSA's <code>ecrecover</code> today. When this ships, swap the verifier address in the factory and new accounts get 500x cheaper verification with zero changes to the signature format or key material.</p>
 
-  document.querySelectorAll('.checkpoint').forEach(function(el) {
-    var cpId = el.getAttribute('data-cp');
-    if (cps[cpId]) {
-      el.classList.add('done');
-    } else {
-      el.classList.remove('done');
-    }
-  });
+<p><strong>EIP-7885</strong> (NTT precompile) takes a different approach: accelerate the Number Theoretic Transform that <em>all</em> lattice-based schemes share. This benefits Falcon, Dilithium, and STARK verification simultaneously.</p>
 
-  document.querySelectorAll('.toc-checkpoint').forEach(function(el) {
-    var cpId = el.getAttribute('data-cp');
-    if (cps[cpId]) {
-      el.classList.add('done');
-    } else {
-      el.classList.remove('done');
-    }
-  });
+<p>Neither is scheduled for a hard fork yet. The first All Core Devs PQ breakout call was February 4, 2026.</p>
 
-  // Update progress bar with checkpoint weighting
-  var total = document.querySelectorAll('.checkpoint').length;
-  var done = 0;
-  document.querySelectorAll('.checkpoint.done').forEach(function() { done++; });
+<h2 id="ch5-naysayer">Naysayer Optimistic Verification: ~25K Gas</h2>
 
-  // Checkpoints contribute to overall progress display on the sidebar dots
-  // The scroll-based progress bar handles page position
-}
+<p>The <a href="https://github.com/ruslan-ilesik/poqeth">Poqeth</a> project (ACM ASIA CCS 2025) introduces a game-changer: <strong>optimistic verification</strong>. Instead of verifying every signature on-chain:</p>
 
-renderCheckpoints();
-</script>
+<ol>
+  <li>Contract accepts the signature provisionally</li>
+  <li>A challenge window opens (like optimistic rollups)</li>
+  <li>Anyone can submit a compact "naysayer proof" pointing to the specific failing step</li>
+  <li>Only the challenged step is re-executed on-chain</li>
+</ol>
+
+<p>Result: <strong>~25K gas</strong> for any PQC scheme in the happy path (no challenge). Trade-off: requires at least one honest watcher.</p>
+
+<h2 id="ch5-hybrid">Hybrid ECDSA + Falcon</h2>
+
+<p>During transition, require <em>both</em> signatures in <code>validateUserOp</code>. If quantum never arrives, you lose nothing. If it does, Falcon protects you. Gas: ~1.5M (Falcon dominates). When precompiles ship, the overhead drops to ~6K total.</p>
+
+<h2 id="ch5-7702">EIP-7702 for Existing EOAs</h2>
+
+<p><a href="https://eips.ethereum.org/EIPS/eip-7702">EIP-7702</a> (live since May 2025, Pectra fork) lets EOAs delegate to a PQC-verifying contract while keeping their address. But the <strong>ECDSA key remains active</strong> &mdash; a quantum attacker could re-delegate. <a href="https://eips.ethereum.org/EIPS/eip-7851">EIP-7851</a> (draft) proposes ECDSA key deactivation to close this gap.</p>
+
+<h2 id="ch5-roadmap">Ethereum's PQ Roadmap (Strawmap)</h2>
+
+<table>
+<tr><th>Pillar</th><th>Current (Vulnerable)</th><th>Target (Quantum-Safe)</th></tr>
+<tr><td>User signatures</td><td>ECDSA</td><td>Lattice-based via native AA (EIP-8141)</td></tr>
+<tr><td>Validator signatures</td><td>BLS</td><td>Hash-based (Winternitz variants)</td></tr>
+<tr><td>Data availability</td><td>KZG</td><td>STARKs / Merkle-based</td></tr>
+<tr><td>ZK proofs</td><td>Groth16 SNARKs</td><td>STARKs (quantum-resistant by construction)</td></tr>
+</table>
+
+<p>Timeline: ~7 hard forks by 2030. Glamsterdam and Hegota in 2026. The Ethereum Foundation formed a dedicated PQ team in January 2026 with $2M in research prizes.</p>
+
+<h2 id="ch5-resources">Resources</h2>
+
+<ul>
+  <li><a href="https://pq.ethereum.org/">pq.ethereum.org</a> &mdash; Ethereum Foundation PQ hub</li>
+  <li><a href="https://github.com/ZKNoxHQ/ETHFALCON">ZKNoxHQ/ETHFALCON</a> &mdash; Production Falcon verifier</li>
+  <li><a href="https://github.com/ruslan-ilesik/poqeth">Poqeth</a> &mdash; Hash-based PQC + Naysayer proofs</li>
+  <li><a href="https://eips.ethereum.org/EIPS/eip-8052">EIP-8052</a> &mdash; Falcon precompile proposal</li>
+  <li><a href="https://eips.ethereum.org/EIPS/eip-8051">EIP-8051</a> &mdash; Dilithium precompile proposal</li>
+  <li><a href="https://github.com/lambdaclass/ethlambda">ethlambda</a> &mdash; PQ consensus client (Rust, XMSS)</li>
+  <li><a href="https://quantumai.google/static/site-assets/downloads/cryptocurrency-whitepaper.pdf">Google QAI paper (March 2026)</a> &mdash; 1,200 qubits to break secp256k1</li>
+</ul>
+
+<!-- ================================================================
+     FOOTER
+     ================================================================ -->
+<hr style="margin-top:3em;border:none;border-top:1px solid var(--border)">
+<p style="color:var(--muted);font-size:.85em;margin-top:1em">
+  <a href="https://github.com/LimeChain/pqc-evm-tutorial">github.com/LimeChain/pqc-evm-tutorial</a> &mdash; 33 tests passing &mdash; MIT License
+</p>
+
 </body>
 </html>
