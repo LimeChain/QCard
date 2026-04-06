@@ -1,0 +1,31 @@
+# Foundry build artifacts
+out/
+cache/
+broadcast/
+foundry.lock
+
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.venv/
+
+# Environment & secrets
+.env
+*.enc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AI tooling
+.claude/
+.letta/
+
+# IDE
+.idea/
+.vscode/
+*.swp
