@@ -25,6 +25,9 @@ Thumbs.db
 .claude/
 .letta/
 
+# here.now publish state (contains claim tokens)
+.herenow/
+
 # IDE
 .idea/
 .vscode/
