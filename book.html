@@ -324,28 +324,31 @@ pip install pycryptodome</code></pre>
 </div>
 
 <div class="step"><h3>Choose a seed and generate your keypair</h3>
-<p>The seed is your <strong>master secret</strong>. Everything derives from it. In production, use a CSPRNG. For this tutorial:</p>
-<pre><code>LAMPORT_SEED="my-quantum-resistant-secret-seed-$(date +%s)"
-echo "YOUR SEED: $LAMPORT_SEED"
+<p>The seed is your <strong>private key</strong>. Everything derives from it. Generate it with a CSPRNG:</p>
+<pre><code>LAMPORT_SEED=$(python3 -c "import os; print('0x' + os.urandom(32).hex())")
+echo "$LAMPORT_SEED" > .lamport-seed
+chmod 600 .lamport-seed
+echo "Seed saved to .lamport-seed"
 
 python3 signer/lamport_signer.py genkeys --seed "$LAMPORT_SEED" --leaf-count 16</code></pre>
 <p>Expected output:</p>
-<pre><code>Generated Lamport account from seed: my-quantum-resistant-secret-seed-...
+<pre><code>Generated Lamport account from seed: 0x8a3f...
   Leaf count:  16
   Per leaf:    512 private values / 512 public key hashes
   Signature:   256 revealed preimages (8192 bytes)
   Account root: 0xe88091cd...</code></pre>
-<p><strong>16 leaves = 16 transactions</strong> before you need to rotate the key tree. For a PoC, this is plenty.</p>
+<p>16 leaves = 16 transactions before key rotation. The account root is a Merkle root of all 16 leaf public keys.</p>
 </div>
 
 <div class="step"><h3>Get the public key root</h3>
 <p>This is the <em>only</em> thing that goes on-chain &mdash; a single 32-byte Merkle root representing your entire key tree:</p>
-<pre><code>PUB_ROOT=$(python3 signer/lamport_signer.py pubroot --seed "$LAMPORT_SEED" --leaf-count 16)
+<pre><code>LAMPORT_SEED=$(cat .lamport-seed)
+PUB_ROOT=$(python3 signer/lamport_signer.py pubroot --seed "$LAMPORT_SEED" --leaf-count 16)
 echo "Public key root: $PUB_ROOT"</code></pre>
 </div>
 </div>
 
-<div class="callout callout-warn"><b>Seed = private key. Lose it = lose everything.</b> The seed is the ONLY secret. Store it securely (password manager, encrypted file, hardware backup). Anyone with the seed can sign transactions from your PQC account.</div>
+<div class="callout callout-warn"><b>The seed IS your private key.</b> Anyone with it controls your account. Store <code>.lamport-seed</code> like you would store an Ethereum private key: encrypted backup, password manager, or hardware storage. The file is <code>chmod 600</code> (owner-only read) but that is not encryption.</div>
 
 <h2 id="ch4-deploy">Phase 2: Deploy the Infrastructure</h2>
 
