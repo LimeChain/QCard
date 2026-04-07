@@ -16,6 +16,7 @@ wheels/
 # Environment & secrets
 .env
 *.enc
+.lamport-seed
 
 # OS
 .DS_Store
