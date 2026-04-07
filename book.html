@@ -386,14 +386,14 @@ export FACTORY_ADDRESS=0x...     # PQCAccountFactory</code></pre>
 <pre><code>MY_ADDRESS=$(cast wallet address --private-key $PRIVATE_KEY)
 
 cast send $FACTORY_ADDRESS \
-  "createLamportAccount(bytes32,address,address,uint256)" \
-  $PUB_ROOT $ENTRY_POINT_ADDRESS $MY_ADDRESS 0 \
+  "createLamportAccount(bytes32,address,uint256)" \
+  $PUB_ROOT $MY_ADDRESS 0 \
   --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $PRIVATE_KEY</code></pre>
 <p>The factory emits a <code>LamportAccountCreated</code> event with the account address. Find it:</p>
 <pre><code># Get the predicted address
 ACCOUNT_ADDRESS=$(cast call $FACTORY_ADDRESS \
-  "getLamportAccountAddress(bytes32,address,address,uint256)(address)" \
-  $PUB_ROOT $ENTRY_POINT_ADDRESS $MY_ADDRESS 0 \
+  "getLamportAccountAddress(bytes32,address,uint256)(address)" \
+  $PUB_ROOT $MY_ADDRESS 0 \
   --rpc-url $BASE_SEPOLIA_RPC_URL)
 echo "PQC Account: $ACCOUNT_ADDRESS"</code></pre>
 </div>
