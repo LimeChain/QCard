@@ -300,100 +300,224 @@ if (result != VERIFY_SUCCESS) return SIG_VALIDATION_FAILED;</code></pre>
 <!-- ================================================================
      CHAPTER 4
      ================================================================ -->
-<h1 id="ch4">Chapter 4: Deploy to Base Sepolia</h1>
+<h1 id="ch4">Chapter 4: End-to-End &mdash; From Key Generation to On-Chain PQC Transaction</h1>
 
-<h2 id="ch4-factory">The Factory</h2>
+<p>This chapter walks through the <strong>complete flow</strong>: generate a quantum-resistant keypair, deploy the infrastructure, create your PQC account, sign a transaction with your Lamport key, submit it through a bundler, and verify it on-chain.</p>
 
-<p><code>PQCAccountFactory</code> deploys both account types via CREATE2 for deterministic addresses. Given the same salt, public key, and owner, the account address is predictable before deployment &mdash; essential for counterfactual accounts in ERC-4337.</p>
+<div class="callout"><b>Two different keys are involved</b>
+<ul style="margin-top:8px">
+  <li><strong>ECDSA key</strong> (regular Ethereum private key) &mdash; used ONLY to deploy contracts and pay gas. This is your "infrastructure" key. It is NOT quantum-resistant.</li>
+  <li><strong>Lamport seed</strong> (32-byte secret) &mdash; this IS your quantum-resistant key. It derives all Lamport keypairs. It never touches the blockchain directly &mdash; only the <em>public key root</em> (a hash) goes on-chain.</li>
+</ul>
+Think of it like building a vault: you use a regular key to install the lock (deploy), but the vault itself opens with a completely different mechanism (Lamport signatures).
+</div>
 
-<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/factory/PQCAccountFactory.sol">src/factory/PQCAccountFactory.sol</a> &nbsp;|&nbsp; <a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/script/DeployFactory.s.sol">script/DeployFactory.s.sol</a></p>
+<h2 id="ch4-keygen">Phase 1: Generate Your Quantum-Resistant Keypair</h2>
 
-<h2 id="ch4-deploy">Deploy Step by Step</h2>
+<p>Before touching any blockchain, generate your Lamport key material:</p>
 
 <div class="steps">
-<div class="step"><h3>Get Base Sepolia ETH</h3>
+<div class="step"><h3>Install the signer</h3>
+<pre><code>python3 -m venv .venv
+source .venv/bin/activate
+pip install pycryptodome</code></pre>
+</div>
+
+<div class="step"><h3>Choose a seed and generate your keypair</h3>
+<p>The seed is your <strong>master secret</strong>. Everything derives from it. In production, use a CSPRNG. For this tutorial:</p>
+<pre><code>export LAMPORT_SEED="my-quantum-resistant-secret-seed-$(date +%s)"
+echo "YOUR SEED (back this up!): $LAMPORT_SEED"
+
+python3 signer/lamport_signer.py genkeys --seed "$LAMPORT_SEED" --leaf-count 16</code></pre>
+<p>Expected output:</p>
+<pre><code>Generated Lamport account from seed: my-quantum-resistant-secret-seed-...
+  Leaf count:  16
+  Per leaf:    512 private values / 512 public key hashes
+  Signature:   256 revealed preimages (8192 bytes)
+  Account root: 0xe88091cd...</code></pre>
+<p><strong>16 leaves = 16 transactions</strong> before you need to rotate the key tree. For a PoC, this is plenty.</p>
+</div>
+
+<div class="step"><h3>Get the public key root</h3>
+<p>This is the <em>only</em> thing that goes on-chain &mdash; a single 32-byte Merkle root representing your entire key tree:</p>
+<pre><code>PUB_ROOT=$(python3 signer/lamport_signer.py pubroot --seed "$LAMPORT_SEED" --leaf-count 16)
+echo "Public key root: $PUB_ROOT"</code></pre>
+</div>
+</div>
+
+<div class="callout callout-warn"><b>Seed = private key. Lose it = lose everything.</b> The seed is the ONLY secret. Store it securely (password manager, encrypted file, hardware backup). Anyone with the seed can sign transactions from your PQC account.</div>
+
+<h2 id="ch4-deploy">Phase 2: Deploy the Infrastructure</h2>
+
+<p>Now deploy the contracts using a regular ECDSA key. This key only pays gas for deployment &mdash; it has no control over your PQC account.</p>
+
+<div class="steps">
+<div class="step"><h3>Get Base Sepolia ETH for deployment gas</h3>
 <p><a href="https://www.base.org/faucet">base.org/faucet</a> or <a href="https://www.alchemy.com/faucets/base-sepolia">Alchemy faucet</a></p>
 </div>
 
-<div class="step"><h3>Set environment</h3>
-<pre><code>export PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+<div class="step"><h3>Set deployer environment</h3>
+<pre><code># This is a REGULAR Ethereum private key for paying gas. NOT your Lamport seed.
+export DEPLOYER_KEY=0xYOUR_ECDSA_PRIVATE_KEY
 export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
 export ENTRY_POINT_ADDRESS=0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789</code></pre>
 </div>
 
-<div class="step"><h3>Dry run (no broadcast)</h3>
-<pre><code>forge script script/DeployFactory.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL</code></pre>
-<p>Expected: <code>LamportVerifier: 0x... | PQCAccountFactory: 0x...</code></p>
+<div class="step"><h3>Deploy LamportVerifier + PQCAccountFactory</h3>
+<pre><code>PRIVATE_KEY=$DEPLOYER_KEY forge script script/DeployFactory.s.sol \
+  --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast</code></pre>
+<p>Save the addresses from the output:</p>
+<pre><code>export VERIFIER_ADDRESS=0x...    # LamportVerifier
+export FACTORY_ADDRESS=0x...     # PQCAccountFactory</code></pre>
+</div>
 </div>
 
-<div class="step"><h3>Deploy for real</h3>
-<pre><code>forge script script/DeployFactory.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast</code></pre>
-<p>This deploys: <strong>LamportVerifier</strong> (stateless verification library) and <strong>PQCAccountFactory</strong> (creates accounts).</p>
-</div>
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/script/DeployFactory.s.sol">script/DeployFactory.s.sol</a> &nbsp;|&nbsp; <a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/src/factory/PQCAccountFactory.sol">src/factory/PQCAccountFactory.sol</a></p>
 
-<div class="step"><h3>Verify deployment</h3>
-<pre><code>export VERIFIER_ADDRESS=0x...   # from deploy output
-export FACTORY_ADDRESS=0x...    # from deploy output
+<h2 id="ch4-create">Phase 3: Create Your PQC Account</h2>
 
-forge script script/VerifyDeployment.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL -vvvv</code></pre>
-<p>Runs on-chain: checks code exists, factory references correct verifier, generates a test keypair, signs and verifies a Lamport signature against the live contract.</p>
-<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/script/VerifyDeployment.s.sol">script/VerifyDeployment.s.sol</a></p>
-</div>
+<p>Now create the actual quantum-resistant smart account. The factory takes your <strong>Lamport public key root</strong> (from Phase 1) and deploys an account that only accepts Lamport signatures matching that root.</p>
 
-<div class="step"><h3>Create an account and fund it</h3>
-<pre><code># Generate Merkle root from seed
-PUB_ROOT=$(python3 signer/lamport_signer.py pubroot --seed "my-seed" --leaf-count 16)
+<div class="steps">
+<div class="step"><h3>Create the Lamport account via factory</h3>
+<pre><code>DEPLOYER_ADDR=$(cast wallet address --private-key $DEPLOYER_KEY)
 
-# Create account via factory
 cast send $FACTORY_ADDRESS \
   "createLamportAccount(bytes32,address,address,uint256)" \
-  $PUB_ROOT $ENTRY_POINT_ADDRESS $YOUR_ADDRESS 0 \
-  --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $PRIVATE_KEY
-
-# Fund the account
-cast send $ACCOUNT_ADDRESS --value 0.01ether \
-  --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $PRIVATE_KEY</code></pre>
+  $PUB_ROOT $ENTRY_POINT_ADDRESS $DEPLOYER_ADDR 0 \
+  --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $DEPLOYER_KEY</code></pre>
+<p>The factory emits a <code>LamportAccountCreated</code> event with the account address. Find it:</p>
+<pre><code># Get the predicted address
+ACCOUNT_ADDRESS=$(cast call $FACTORY_ADDRESS \
+  "getLamportAccountAddress(bytes32,address,address,uint256)(address)" \
+  $PUB_ROOT $ENTRY_POINT_ADDRESS $DEPLOYER_ADDR 0 \
+  --rpc-url $BASE_SEPOLIA_RPC_URL)
+echo "PQC Account: $ACCOUNT_ADDRESS"</code></pre>
 </div>
 
-<div class="step"><h3>Read account state</h3>
-<pre><code>cast call $ACCOUNT_ADDRESS "publicKeyRoot()(bytes32)" --rpc-url $BASE_SEPOLIA_RPC_URL
+<div class="step"><h3>Fund the PQC account</h3>
+<p>Send some test ETH so the account can pay for gas when submitting UserOperations:</p>
+<pre><code>cast send $ACCOUNT_ADDRESS --value 0.01ether \
+  --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $DEPLOYER_KEY</code></pre>
+</div>
+
+<div class="step"><h3>Verify your account is live</h3>
+<pre><code>echo "Public key root:"
+cast call $ACCOUNT_ADDRESS "publicKeyRoot()(bytes32)" --rpc-url $BASE_SEPOLIA_RPC_URL
+echo "Next key index (should be 0):"
 cast call $ACCOUNT_ADDRESS "nextKeyIndex()(uint256)" --rpc-url $BASE_SEPOLIA_RPC_URL
-cast call $ACCOUNT_ADDRESS "owner()(address)" --rpc-url $BASE_SEPOLIA_RPC_URL
-cast call $ACCOUNT_ADDRESS "nonce()(uint256)" --rpc-url $BASE_SEPOLIA_RPC_URL</code></pre>
+echo "Balance:"
+cast balance $ACCOUNT_ADDRESS --rpc-url $BASE_SEPOLIA_RPC_URL</code></pre>
 </div>
 </div>
 
-<h2 id="ch4-signer">The Python Signer</h2>
+<h2 id="ch4-sign">Phase 4: Sign a Transaction with Your Lamport Key</h2>
 
-<p>PQC signing is off-chain. The signer uses real <strong>Keccak-256</strong> (via pycryptodome), matching the EVM's <code>keccak256</code> opcode exactly. Key derivation matches the Solidity test helpers: <code>keccak256(abi.encodePacked(seed, uint256(index)))</code>.</p>
+<p>This is the quantum-resistant part. You sign with the <strong>Lamport seed</strong> (not any ECDSA key). The signature contains 256 revealed hash preimages + a Merkle proof, totaling ~24 KB.</p>
 
-<pre><code># Install
-pip install pycryptodome
+<div class="steps">
+<div class="step"><h3>Construct and sign a UserOperation</h3>
+<p>For this PoC, we'll sign a simple ETH transfer. The <code>userOpHash</code> is what the EntryPoint computes from the UserOperation fields:</p>
+<pre><code># Example: sign a test userOpHash (in production, compute this from the real UserOp)
+USER_OP_HASH=0x$(python3 -c "import hashlib; print(hashlib.sha256(b'test-transfer').hexdigest())")
 
-# Generate account tree (16 Lamport leaves = 16 transactions before rotation)
-python3 signer/lamport_signer.py genkeys --seed "my-seed" --leaf-count 16
-
-# Get Merkle root for account creation
-python3 signer/lamport_signer.py pubroot --seed "my-seed" --leaf-count 16
-
-# Sign a userOpHash with leaf 0
+# Sign with Lamport leaf 0
 python3 signer/lamport_signer.py sign \
-  --seed "my-seed" --leaf-count 16 --leaf-index 0 \
-  --message "0xabcdef..."</code></pre>
+  --seed "$LAMPORT_SEED" \
+  --leaf-count 16 \
+  --leaf-index 0 \
+  --message "$USER_OP_HASH" > /tmp/lamport_sig.json
 
-<p>Output: JSON with <code>public_key_hashes</code> (512), <code>signature</code> (256 preimages), <code>leaf_index</code>, and <code>merkle_proof</code> &mdash; everything needed for <code>userOp.signature</code>.</p>
+echo "Signature generated. Leaf 0 consumed."
+echo "Merkle proof length: $(python3 -c "import json; d=json.load(open('/tmp/lamport_sig.json')); print(len(d['merkle_proof']))")"</code></pre>
+</div>
 
-<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/signer/lamport_signer.py">signer/lamport_signer.py</a></p>
+<div class="step"><h3>Understand the signature format</h3>
+<p>The JSON output contains everything needed for <code>userOp.signature</code>:</p>
+<pre><code>{
+  "public_key_hashes": [512 x bytes32],   // The Lamport public key for this leaf
+  "signature": [256 x bytes32],           // The revealed preimages
+  "leaf_index": 0,                        // Which leaf in the Merkle tree
+  "merkle_proof": [N x bytes32]           // Proof that this leaf belongs to the account root
+}</code></pre>
+<p>ABI-encoded as: <code>(bytes32[512], bytes32[256], uint256, bytes32[])</code></p>
+</div>
+</div>
 
-<h2 id="ch4-keys">Private Key Storage</h2>
+<h2 id="ch4-submit">Phase 5: Submit via Bundler</h2>
+
+<p>The signed UserOperation goes to an ERC-4337 bundler, which wraps it in a regular transaction and submits it to the EntryPoint contract.</p>
+
+<div class="steps">
+<div class="step"><h3>Get a Pimlico API key</h3>
+<p>Sign up at <a href="https://dashboard.pimlico.io/">dashboard.pimlico.io</a> (free tier works for testnet). Get your API key and set it:</p>
+<pre><code>export PIMLICO_API_KEY=your_pimlico_api_key
+export BUNDLER_URL="https://api.pimlico.io/v2/84532/rpc?apikey=$PIMLICO_API_KEY"</code></pre>
+</div>
+
+<div class="step"><h3>Submit the UserOperation</h3>
+<p>The bundler expects the full UserOperation as JSON-RPC. The signature field is the ABI-encoded Lamport signature from Phase 4:</p>
+<pre><code># Check the bundler is alive and supports our EntryPoint
+curl -s -X POST "$BUNDLER_URL" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"eth_supportedEntryPoints","params":[]}' | python3 -m json.tool</code></pre>
+<p>You should see <code>0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789</code> in the response.</p>
+
+<p>A full UserOp submission script would construct the calldata, estimate gas, ABI-encode the Lamport signature, and call <code>eth_sendUserOperation</code>. This is non-trivial &mdash; see <a href="https://docs.pimlico.io/permissionless">permissionless.js</a> for a TypeScript SDK that handles all of this, or adapt the <a href="https://github.com/pimlicolabs/permissionless-custom-account-boilerplate">custom account boilerplate</a> with the Lamport signer.</p>
+</div>
+
+<div class="step"><h3>Verify on BaseScan</h3>
+<p>After the bundler processes your UserOp, check <a href="https://sepolia.basescan.org/">sepolia.basescan.org</a>. Search for your account address &mdash; you should see:</p>
+<ul>
+  <li>The account creation transaction (from the factory)</li>
+  <li>The ETH funding transaction</li>
+  <li>The UserOperation execution (once submitted via bundler)</li>
+</ul>
+<p>The account's <code>nonce</code> and <code>nextKeyIndex</code> will have incremented:</p>
+<pre><code>cast call $ACCOUNT_ADDRESS "nonce()(uint256)" --rpc-url $BASE_SEPOLIA_RPC_URL
+# Should be 1 (was 0 before the UserOp)</code></pre>
+</div>
+</div>
+
+<h2 id="ch4-verify">Phase 6: Verify Everything On-Chain</h2>
+
+<pre><code>forge script script/VerifyDeployment.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL -vvvv</code></pre>
+<p>This script generates a test keypair, signs a message, and verifies the signature against the deployed LamportVerifier &mdash; proving the entire verification pipeline works on live contracts.</p>
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/script/VerifyDeployment.s.sol">script/VerifyDeployment.s.sol</a></p>
+
+<h2 id="ch4-recap">What Just Happened</h2>
+
+<div class="diagram">
+Phase 1: Generate Lamport seed ──→ derive 16 leaf keypairs ──→ compute Merkle root
+                                                                       |
+Phase 2: Deploy LamportVerifier + PQCAccountFactory (ECDSA key pays gas)
+                                                                       |
+Phase 3: Factory.createLamportAccount(merkleRoot) ──→ PQC account deployed
+                                                                       |
+Phase 4: Sign userOpHash with Lamport leaf 0 (off-chain, Python signer)
+                                                                       |
+Phase 5: Submit UserOp to bundler ──→ EntryPoint.handleOps() ──→ account.validateUserOp()
+         │                                                              │
+         │  Bundler uses ECDSA to submit                  Account uses LAMPORT to verify
+         │  (this is the bundler's key,                   (quantum-resistant! the signature
+         │   not yours)                                    contains 256 hash preimages)
+                                                                       |
+Phase 6: nonce++ ──→ nextKeyIndex++ ──→ Leaf 0 consumed, 15 remaining
+</code></pre>
+</div>
+
+<h2 id="ch4-keys">Key Management Summary</h2>
 
 <table>
-<tr><th>Key Type</th><th>Size</th><th>How to Store</th></tr>
-<tr><td>Lamport seed</td><td>32 bytes</td><td>Single seed derives everything. Encrypt with AES-256-GCM or store in env var.</td></tr>
-<tr><td>Falcon-512 secret key</td><td>1,281 bytes</td><td>Store encrypted. Generated via ZKNox Python signer.</td></tr>
+<tr><th>Secret</th><th>What It Is</th><th>Size</th><th>Quantum Safe?</th><th>How to Store</th></tr>
+<tr><td><strong>Lamport seed</strong></td><td>Master secret that derives all Lamport keypairs</td><td>32 bytes</td><td><span class="chip chip-yes">Yes</span></td><td>Password manager, encrypted file, or hardware backup</td></tr>
+<tr><td>Deployer ECDSA key</td><td>Regular ETH key for paying deployment gas</td><td>32 bytes</td><td><span class="chip chip-no">No</span></td><td>Only needed once for setup. Can discard after deployment.</td></tr>
+<tr><td>Pimlico API key</td><td>Bundler access token</td><td>Variable</td><td>N/A</td><td>Environment variable</td></tr>
 </table>
 
-<p>The seed is the <strong>only secret</strong>. Each Lamport leaf is derived deterministically. Track <code>nextKeyIndex</code> to avoid reuse &mdash; the contract enforces this on-chain.</p>
+<p><strong>The Lamport seed is the only secret that matters long-term.</strong> The ECDSA deployer key is disposable infrastructure. The Pimlico key is replaceable. Your PQC account's security depends entirely on the Lamport seed.</p>
+
+<p class="file-link"><a href="https://github.com/LimeChain/pqc-evm-tutorial/blob/main/signer/lamport_signer.py">signer/lamport_signer.py</a> &mdash; full source for the off-chain signer</p>
 
 <!-- ================================================================
      CHAPTER 5
