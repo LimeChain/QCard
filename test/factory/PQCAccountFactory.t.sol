@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import "forge-std/Test.sol";
-import "../../src/factory/PQCAccountFactory.sol";
-import "../../src/lamport/LamportVerifier.sol";
-import "../../src/lamport/LamportAccount.sol";
-import "../../src/falcon/FalconAccount.sol";
+import {Test} from "forge-std/Test.sol";
+import {PQCAccountFactory} from "../../src/factory/PQCAccountFactory.sol";
+import {LamportVerifier} from "../../src/lamport/LamportVerifier.sol";
+import {LamportAccount} from "../../src/lamport/LamportAccount.sol";
+import {FalconAccount} from "../../src/falcon/FalconAccount.sol";
 import {ISigVerifier} from "InterfaceVerifier/IVerifier.sol";
 
 contract MockVerifier is ISigVerifier {
@@ -40,7 +40,7 @@ contract PQCAccountFactoryTest is Test {
         assertTrue(address(account) != address(0), "Account should be deployed");
         assertEq(account.owner(), OWNER, "Owner should match");
         assertEq(account.publicKeyRoot(), root, "Public key root should match");
-        assertEq(account.entryPoint(), ENTRY_POINT, "EntryPoint should match");
+        assertEq(account.ENTRY_POINT(), ENTRY_POINT, "EntryPoint should match");
     }
 
     function test_CreateFalconAccount() public {
@@ -50,7 +50,7 @@ contract PQCAccountFactoryTest is Test {
 
         assertTrue(address(account) != address(0), "Account should be deployed");
         assertEq(account.owner(), OWNER, "Owner should match");
-        assertEq(account.entryPoint(), ENTRY_POINT, "EntryPoint should match");
+        assertEq(account.ENTRY_POINT(), ENTRY_POINT, "EntryPoint should match");
     }
 
     function test_DeterministicAddress() public {

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import "forge-std/Test.sol";
-import "../../src/lamport/LamportVerifier.sol";
+import {Test} from "forge-std/Test.sol";
+import {LamportVerifier} from "../../src/lamport/LamportVerifier.sol";
 
 contract LamportVerifierTest is Test {
     uint256 internal constant LEAF_COUNT = 4;

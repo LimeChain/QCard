@@ -9,17 +9,17 @@ import {FalconAccount} from "../falcon/FalconAccount.sol";
 /// @notice CREATE2 factory for deterministic account addresses.
 ///         Supports both Lamport (hash-based) and Falcon (lattice-based) accounts.
 contract PQCAccountFactory {
-    LamportVerifier public immutable lamportVerifier;
-    address public immutable falconVerifierAddress;
-    address public immutable entryPoint;
+    LamportVerifier public immutable LAMPORT_VERIFIER;
+    address public immutable FALCON_VERIFIER_ADDRESS;
+    address public immutable ENTRY_POINT;
 
     event LamportAccountCreated(address indexed account, address indexed owner);
     event FalconAccountCreated(address indexed account, address indexed owner);
 
     constructor(address _lamportVerifier, address _falconVerifier, address _entryPoint) {
-        lamportVerifier = LamportVerifier(_lamportVerifier);
-        falconVerifierAddress = _falconVerifier;
-        entryPoint = _entryPoint;
+        LAMPORT_VERIFIER = LamportVerifier(_lamportVerifier);
+        FALCON_VERIFIER_ADDRESS = _falconVerifier;
+        ENTRY_POINT = _entryPoint;
     }
 
     /// @notice Deploy a new Lamport smart account
@@ -32,9 +32,9 @@ contract PQCAccountFactory {
         uint256 salt
     ) external returns (LamportAccount account) {
         account = new LamportAccount{salt: bytes32(salt)}(
-            address(lamportVerifier),
+            address(LAMPORT_VERIFIER),
             pubKeyRoot,
-            entryPoint,
+            ENTRY_POINT,
             owner
         );
         emit LamportAccountCreated(address(account), owner);
@@ -50,9 +50,9 @@ contract PQCAccountFactory {
         uint256 salt
     ) external returns (FalconAccount account) {
         account = new FalconAccount{salt: bytes32(salt)}(
-            falconVerifierAddress,
+            FALCON_VERIFIER_ADDRESS,
             publicKey,
-            entryPoint,
+            ENTRY_POINT,
             owner
         );
         emit FalconAccountCreated(address(account), owner);
@@ -72,7 +72,7 @@ contract PQCAccountFactory {
                 keccak256(
                     abi.encodePacked(
                         type(LamportAccount).creationCode,
-                        abi.encode(address(lamportVerifier), pubKeyRoot, entryPoint, owner)
+                        abi.encode(address(LAMPORT_VERIFIER), pubKeyRoot, ENTRY_POINT, owner)
                     )
                 )
             )

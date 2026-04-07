@@ -14,8 +14,8 @@ import {ISigVerifier} from "InterfaceVerifier/IVerifier.sol";
 ///   - validateUserOp calls ETHFALCON.verify() to check the signature
 ///   - Gas cost: ~1.5M per verification (vs 3,000 for ECDSA)
 contract FalconAccount is IAccount {
-    ISigVerifier public immutable falconVerifier;
-    address public immutable entryPoint;
+    ISigVerifier public immutable FALCON_VERIFIER;
+    address public immutable ENTRY_POINT;
     address public owner;
     uint256 public nonce;
 
@@ -36,21 +36,25 @@ contract FalconAccount is IAccount {
     error PublicKeyNotSet();
 
     modifier onlyOwner() {
-        if (msg.sender != owner) revert OnlyOwner();
+        _onlyOwner();
         _;
+    }
+
+    function _onlyOwner() internal view {
+        if (msg.sender != owner) revert OnlyOwner();
     }
 
     // ISigVerifier.verify.selector = bytes4(keccak256("verify(bytes,bytes32,bytes)"))
     bytes4 internal constant VERIFY_SUCCESS = 0x024ad318;
 
     constructor(address _falconVerifier, bytes memory _publicKey, address _entryPoint, address _owner) {
-        falconVerifier = ISigVerifier(_falconVerifier);
-        entryPoint = _entryPoint;
+        FALCON_VERIFIER = ISigVerifier(_falconVerifier);
+        ENTRY_POINT = _entryPoint;
         owner = _owner;
 
         // Store the public key via ETHFALCON's setKey (uses SSTORE2)
         if (_publicKey.length > 0) {
-            storedPubKeyPointer = falconVerifier.setKey(_publicKey);
+            storedPubKeyPointer = FALCON_VERIFIER.setKey(_publicKey);
             rawPublicKey = _publicKey;
         }
     }
@@ -63,13 +67,13 @@ contract FalconAccount is IAccount {
         bytes32 userOpHash,
         uint256 missingAccountFunds
     ) external override returns (uint256 validationData) {
-        if (msg.sender != entryPoint) revert OnlyEntryPoint();
+        if (msg.sender != ENTRY_POINT) revert OnlyEntryPoint();
         if (storedPubKeyPointer.length == 0) revert PublicKeyNotSet();
         if (userOp.sender != address(this) || userOp.nonce != nonce) {
             return SIG_VALIDATION_FAILED;
         }
 
-        bytes4 result = falconVerifier.verify(
+        bytes4 result = FALCON_VERIFIER.verify(
             storedPubKeyPointer,
             userOpHash,
             userOp.signature
@@ -82,7 +86,7 @@ contract FalconAccount is IAccount {
         nonce++;
 
         if (missingAccountFunds > 0) {
-            (bool success,) = payable(entryPoint).call{value: missingAccountFunds}("");
+            (bool success,) = payable(ENTRY_POINT).call{value: missingAccountFunds}("");
             (success);
         }
 
@@ -93,7 +97,7 @@ contract FalconAccount is IAccount {
 
     /// @notice Execute a call from this account (only owner or EntryPoint after validation)
     function execute(address target, uint256 value, bytes calldata data) external {
-        if (msg.sender != owner && msg.sender != entryPoint) revert OnlyEntryPointOrOwner();
+        if (msg.sender != owner && msg.sender != ENTRY_POINT) revert OnlyEntryPointOrOwner();
         (bool success,) = target.call{value: value}(data);
         if (!success) revert ExecutionFailed();
         emit Executed(target, value, data);
@@ -101,7 +105,7 @@ contract FalconAccount is IAccount {
 
     /// @notice Update the Falcon public key
     function updatePublicKey(bytes memory newKey) external onlyOwner {
-        storedPubKeyPointer = falconVerifier.setKey(newKey);
+        storedPubKeyPointer = FALCON_VERIFIER.setKey(newKey);
         rawPublicKey = newKey;
         emit PublicKeyUpdated();
     }

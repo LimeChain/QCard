@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import "forge-std/Test.sol";
-import "../../src/falcon/FalconAccount.sol";
-import "../../src/interfaces/IAccount.sol";
+import {Test} from "forge-std/Test.sol";
+import {FalconAccount} from "../../src/falcon/FalconAccount.sol";
+import {UserOperation} from "../../src/interfaces/IAccount.sol";
 import {ISigVerifier} from "InterfaceVerifier/IVerifier.sol";
 
 contract MockFalconVerifier is ISigVerifier {
