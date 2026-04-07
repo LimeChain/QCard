@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import "forge-std/Script.sol";
-import "../src/lamport/LamportVerifier.sol";
-import "../src/factory/PQCAccountFactory.sol";
+import {Script, console} from "forge-std/Script.sol";
+import {LamportVerifier} from "../src/lamport/LamportVerifier.sol";
+import {PQCAccountFactory} from "../src/factory/PQCAccountFactory.sol";
 
 /// @notice Deploy the full PQC account stack to Base Sepolia
 /// @dev Run: forge script script/DeployFactory.s.sol --rpc-url base_sepolia --broadcast

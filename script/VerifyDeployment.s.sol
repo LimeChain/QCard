@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import "forge-std/Script.sol";
-import "../src/lamport/LamportVerifier.sol";
-import "../src/factory/PQCAccountFactory.sol";
+import {Script, console} from "forge-std/Script.sol";
+import {LamportVerifier} from "../src/lamport/LamportVerifier.sol";
+import {PQCAccountFactory} from "../src/factory/PQCAccountFactory.sol";
 
 /// @notice Post-deployment verification — runs against live contracts on Base Sepolia
 /// @dev Usage:
@@ -40,14 +40,14 @@ contract VerifyDeployment is Script {
 
     function _checkFactoryRef(address factoryAddr, address verifierAddr) internal view {
         PQCAccountFactory factory = PQCAccountFactory(factoryAddr);
-        address stored = address(factory.lamportVerifier());
+        address stored = address(factory.LAMPORT_VERIFIER());
         require(stored == verifierAddr, "Factory points to wrong verifier");
         console.log("PASS: Factory references correct LamportVerifier");
     }
 
     function _checkEntryPoint(address factoryAddr, address expectedEntryPoint) internal view {
         PQCAccountFactory factory = PQCAccountFactory(factoryAddr);
-        require(factory.entryPoint() == expectedEntryPoint, "Factory points to wrong EntryPoint");
+        require(factory.ENTRY_POINT() == expectedEntryPoint, "Factory points to wrong EntryPoint");
         console.log("PASS: Factory references correct EntryPoint");
     }
 

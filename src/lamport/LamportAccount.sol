@@ -15,8 +15,8 @@ import {LamportVerifier} from "./LamportVerifier.sol";
 ///   - The contract tracks which leaf index is next via `nextKeyIndex`
 ///   - When all leaves are used, the owner registers a new Merkle root
 contract LamportAccount is IAccount {
-    LamportVerifier public immutable verifier;
-    address public immutable entryPoint;
+    LamportVerifier public immutable VERIFIER;
+    address public immutable ENTRY_POINT;
     bytes32 public publicKeyRoot;
     uint256 public nextKeyIndex;
     address public owner;
@@ -33,13 +33,17 @@ contract LamportAccount is IAccount {
     error ExecutionFailed();
 
     modifier onlyOwner() {
-        if (msg.sender != owner) revert OnlyOwner();
+        _onlyOwner();
         _;
     }
 
+    function _onlyOwner() internal view {
+        if (msg.sender != owner) revert OnlyOwner();
+    }
+
     constructor(address _verifier, bytes32 _publicKeyRoot, address _entryPoint, address _owner) {
-        verifier = LamportVerifier(_verifier);
-        entryPoint = _entryPoint;
+        VERIFIER = LamportVerifier(_verifier);
+        ENTRY_POINT = _entryPoint;
         publicKeyRoot = _publicKeyRoot;
         owner = _owner;
     }
@@ -52,7 +56,7 @@ contract LamportAccount is IAccount {
         bytes32 userOpHash,
         uint256 missingAccountFunds
     ) external override returns (uint256 validationData) {
-        if (msg.sender != entryPoint) revert OnlyEntryPoint();
+        if (msg.sender != ENTRY_POINT) revert OnlyEntryPoint();
         if (userOp.sender != address(this) || userOp.nonce != nonce) {
             return SIG_VALIDATION_FAILED;
         }
@@ -68,7 +72,7 @@ contract LamportAccount is IAccount {
             return SIG_VALIDATION_FAILED;
         }
 
-        bool valid = verifier.verifyWithRoot(
+        bool valid = VERIFIER.verifyWithRoot(
             userOpHash,
             publicKeyRoot,
             pubKeyHashes,
@@ -85,7 +89,7 @@ contract LamportAccount is IAccount {
         nonce++;
 
         if (missingAccountFunds > 0) {
-            (bool success,) = payable(entryPoint).call{value: missingAccountFunds}("");
+            (bool success,) = payable(ENTRY_POINT).call{value: missingAccountFunds}("");
             (success); // ignore failure (EntryPoint will handle it)
         }
 
@@ -94,7 +98,7 @@ contract LamportAccount is IAccount {
 
     /// @notice Execute a call from this account (only owner or EntryPoint after validation)
     function execute(address target, uint256 value, bytes calldata data) external {
-        if (msg.sender != owner && msg.sender != entryPoint) revert OnlyEntryPointOrOwner();
+        if (msg.sender != owner && msg.sender != ENTRY_POINT) revert OnlyEntryPointOrOwner();
         (bool success,) = target.call{value: value}(data);
         if (!success) revert ExecutionFailed();
         emit Executed(target, value, data);
