@@ -325,8 +325,8 @@ pip install pycryptodome</code></pre>
 
 <div class="step"><h3>Choose a seed and generate your keypair</h3>
 <p>The seed is your <strong>master secret</strong>. Everything derives from it. In production, use a CSPRNG. For this tutorial:</p>
-<pre><code>export LAMPORT_SEED="my-quantum-resistant-secret-seed-$(date +%s)"
-echo "YOUR SEED (back this up!): $LAMPORT_SEED"
+<pre><code>LAMPORT_SEED="my-quantum-resistant-secret-seed-$(date +%s)"
+echo "YOUR SEED: $LAMPORT_SEED"
 
 python3 signer/lamport_signer.py genkeys --seed "$LAMPORT_SEED" --leaf-count 16</code></pre>
 <p>Expected output:</p>
@@ -358,13 +358,13 @@ echo "Public key root: $PUB_ROOT"</code></pre>
 
 <div class="step"><h3>Set deployer environment</h3>
 <pre><code># This is a REGULAR Ethereum private key for paying gas. NOT your Lamport seed.
-export DEPLOYER_KEY=0xYOUR_ECDSA_PRIVATE_KEY
+export PRIVATE_KEY=0xYOUR_ECDSA_PRIVATE_KEY
 export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
 export ENTRY_POINT_ADDRESS=0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789</code></pre>
 </div>
 
 <div class="step"><h3>Deploy LamportVerifier + PQCAccountFactory</h3>
-<pre><code>PRIVATE_KEY=$DEPLOYER_KEY forge script script/DeployFactory.s.sol \
+<pre><code>forge script script/DeployFactory.s.sol \
   --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast</code></pre>
 <p>Save the addresses from the output:</p>
 <pre><code>export VERIFIER_ADDRESS=0x...    # LamportVerifier
@@ -380,17 +380,17 @@ export FACTORY_ADDRESS=0x...     # PQCAccountFactory</code></pre>
 
 <div class="steps">
 <div class="step"><h3>Create the Lamport account via factory</h3>
-<pre><code>DEPLOYER_ADDR=$(cast wallet address --private-key $DEPLOYER_KEY)
+<pre><code>MY_ADDRESS=$(cast wallet address --private-key $PRIVATE_KEY)
 
 cast send $FACTORY_ADDRESS \
   "createLamportAccount(bytes32,address,address,uint256)" \
-  $PUB_ROOT $ENTRY_POINT_ADDRESS $DEPLOYER_ADDR 0 \
-  --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $DEPLOYER_KEY</code></pre>
+  $PUB_ROOT $ENTRY_POINT_ADDRESS $MY_ADDRESS 0 \
+  --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $PRIVATE_KEY</code></pre>
 <p>The factory emits a <code>LamportAccountCreated</code> event with the account address. Find it:</p>
 <pre><code># Get the predicted address
 ACCOUNT_ADDRESS=$(cast call $FACTORY_ADDRESS \
   "getLamportAccountAddress(bytes32,address,address,uint256)(address)" \
-  $PUB_ROOT $ENTRY_POINT_ADDRESS $DEPLOYER_ADDR 0 \
+  $PUB_ROOT $ENTRY_POINT_ADDRESS $MY_ADDRESS 0 \
   --rpc-url $BASE_SEPOLIA_RPC_URL)
 echo "PQC Account: $ACCOUNT_ADDRESS"</code></pre>
 </div>
@@ -398,7 +398,7 @@ echo "PQC Account: $ACCOUNT_ADDRESS"</code></pre>
 <div class="step"><h3>Fund the PQC account</h3>
 <p>Send some test ETH so the account can pay for gas when submitting UserOperations:</p>
 <pre><code>cast send $ACCOUNT_ADDRESS --value 0.01ether \
-  --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $DEPLOYER_KEY</code></pre>
+  --rpc-url $BASE_SEPOLIA_RPC_URL --private-key $PRIVATE_KEY</code></pre>
 </div>
 
 <div class="step"><h3>Verify your account is live</h3>
@@ -511,7 +511,7 @@ Phase 6: nonce++ ──→ nextKeyIndex++ ──→ Leaf 0 consumed, 15 remainin
 <table>
 <tr><th>Secret</th><th>What It Is</th><th>Size</th><th>Quantum Safe?</th><th>How to Store</th></tr>
 <tr><td><strong>Lamport seed</strong></td><td>Master secret that derives all Lamport keypairs</td><td>32 bytes</td><td><span class="chip chip-yes">Yes</span></td><td>Password manager, encrypted file, or hardware backup</td></tr>
-<tr><td>Deployer ECDSA key</td><td>Regular ETH key for paying deployment gas</td><td>32 bytes</td><td><span class="chip chip-no">No</span></td><td>Only needed once for setup. Can discard after deployment.</td></tr>
+<tr><td>PRIVATE_KEY (ECDSA)</td><td>Regular ETH key for paying deployment gas</td><td>32 bytes</td><td><span class="chip chip-no">No</span></td><td>Only needed for setup. Can use any funded testnet wallet.</td></tr>
 <tr><td>Pimlico API key</td><td>Bundler access token</td><td>Variable</td><td>N/A</td><td>Environment variable</td></tr>
 </table>
 
