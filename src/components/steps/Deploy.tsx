@@ -48,8 +48,8 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
     setIsDeploying(true)
 
     try {
-      // Fetch wallet client on demand — avoids the stale/undefined hook issue
-      const walletClient = await getWalletClient(config)
+      // Fetch wallet client on demand with explicit chain
+      const walletClient = await getWalletClient(config, { chainId: 11155111 })
 
       const salt = BigInt(Date.now())
 
