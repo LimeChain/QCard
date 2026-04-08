@@ -3,7 +3,9 @@ import { Button } from "../ui/Button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/Card"
 import { Badge } from "../ui/Badge"
 import { Wallet, CheckCircle2, ExternalLink, AlertTriangle } from "lucide-react"
-import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient } from "wagmi"
+import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi"
+import { getWalletClient } from "wagmi/actions"
+import { config } from "@/lib/wagmi"
 import { useWizard } from "@/lib/store"
 import { hcaFactoryAbi } from "@/lib/contracts/abis"
 import { ADDRESSES } from "@/lib/contracts/addresses"
@@ -13,7 +15,6 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
   const { connectors, connect } = useConnect()
   const { disconnect } = useDisconnect()
   const publicClient = usePublicClient()
-  const { data: walletClient } = useWalletClient()
   const wizard = useWizard()
 
   const [isDeploying, setIsDeploying] = React.useState(false)
@@ -27,8 +28,8 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
   }
 
   const handleDeploy = async () => {
-    if (!walletClient || !publicClient || !address) {
-      setDeployError('Wallet not ready. Try disconnecting and reconnecting.')
+    if (!publicClient || !address) {
+      setDeployError('Wallet not connected.')
       return
     }
     if (!wizard.authRoot) {
@@ -38,8 +39,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
 
     if (!factoryConfigured) {
       setDeployError(
-        `Factory not deployed. Set ADDRESSES.hcaFactory in contracts/addresses.ts. ` +
-        `Expected: a deployed HCAFactory on Sepolia.`
+        `Factory not deployed. Set NEXT_PUBLIC_HCA_FACTORY in .env.local.`
       )
       return
     }
@@ -48,6 +48,9 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
     setIsDeploying(true)
 
     try {
+      // Fetch wallet client on demand — avoids the stale/undefined hook issue
+      const walletClient = await getWalletClient(config)
+
       const salt = BigInt(Date.now())
 
       const hash = await walletClient.writeContract({
@@ -57,7 +60,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
         args: [wizard.authRoot as `0x${string}`, address, salt],
       })
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash })
+      await publicClient.waitForTransactionReceipt({ hash })
 
       // Read the predicted account address
       const accountAddr = await publicClient.readContract({
