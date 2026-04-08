@@ -231,12 +231,14 @@ contract HCAAccountTest is Test {
         UserOperation memory userOp = UserOperation({
             sender: address(badAccount),
             nonce: 0,
+            initCode: "",
             callData: "",
             callGasLimit: 100000,
             verificationGasLimit: 500000,
             preVerificationGas: 50000,
             maxFeePerGas: 1 gwei,
             maxPriorityFeePerGas: 1 gwei,
+            paymasterAndData: "",
             signature: signature
         });
 
@@ -339,12 +341,14 @@ contract HCAAccountTest is Test {
         return UserOperation({
             sender: address(account),
             nonce: userNonce,
+            initCode: "",
             callData: "",
             callGasLimit: 100000,
             verificationGasLimit: 3500000,
             preVerificationGas: 50000,
             maxFeePerGas: 1 gwei,
             maxPriorityFeePerGas: 1 gwei,
+            paymasterAndData: "",
             signature: sig
         });
     }

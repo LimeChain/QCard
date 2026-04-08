@@ -37,7 +37,7 @@ npm run dev
 | `NEXT_PUBLIC_LAMPORT_VERIFIER` | Yes | LamportVerifier contract address |
 | `NEXT_PUBLIC_ECDSA_VERIFIER` | Yes | ECDSAVerifier contract address |
 | `NEXT_PUBLIC_FALCON_VERIFIER` | No | FalconVerifier address (set to `0x0...0` if not deployed) |
-| `NEXT_PUBLIC_PIMLICO_API_KEY` | For bundler | Get one at [dashboard.pimlico.io](https://dashboard.pimlico.io/) (free tier works for testnet) |
+| `NEXT_PUBLIC_PIMLICO_API_KEY` | For PQC flow | ERC-4337 bundler key. Without it, the app falls back to direct MetaMask calls (no PQC verification on-chain). Free tier at [dashboard.pimlico.io](https://dashboard.pimlico.io/) |
 
 ## Deploy Contracts
 
@@ -71,6 +71,21 @@ Verify deployment: `./scripts/verify.sh`
 
 ## Architecture
 
+### Why a bundler?
+
+Ethereum's protocol only validates ECDSA signatures. A Lamport-signed transaction can't be sent directly to the network — it would be rejected at the mempool level before reaching any contract. [ERC-4337 Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337) solves this by moving signature verification from the protocol into a smart contract:
+
+1. **You** build a UserOperation (a data blob, not a transaction) and sign it with your PQC key
+2. **The bundler** (Pimlico) wraps your UserOperation in a regular ECDSA-signed transaction and submits it to the EntryPoint contract
+3. **The EntryPoint** calls your HCA account's `validateUserOp()`, which verifies the PQC signature on-chain
+4. **If valid**, the EntryPoint calls `execute()` to perform the actual action (send ETH, call a contract, etc.)
+
+The bundler is the bridge between PQC-signed intents and Ethereum's ECDSA-only mempool. Without it, there's no way to get a Lamport or Falcon signature verified on-chain. The app's "Direct Wallet Mode" fallback calls `execute()` from MetaMask directly — but that uses regular ECDSA and skips PQC verification entirely.
+
+[Pimlico](https://pimlico.io/) is the bundler service used here. Free tier works for testnet. Get an API key at [dashboard.pimlico.io](https://dashboard.pimlico.io/).
+
+### Flow
+
 ```
 Browser (Next.js)                    Sepolia
   |                                      |
@@ -81,14 +96,20 @@ Browser (Next.js)                    Sepolia
   |-- 4. Deploy HCAAccount -----------> Factory.createAccount(authRoot)
   |-- 5. Fund account ----------------> send ETH
   |                                      |
-  |-- 6. Sign userOpHash (Lamport)       |
-  |-- 7. Submit UserOp ---------------> Bundler -> EntryPoint -> HCAAccount
-  |                                      |       validateUserOp():
-  |                                      |         - verify Merkle proof
-  |                                      |         - dispatch to verifier[version]
-  |                                      |         - check signature
-  |                                      |       execute():
-  |                                      |         - send ETH to recipient
+  |-- 6. Sign userOpHash (PQC key)       |
+  |-- 7. Submit UserOp ------.           |
+  |                           |          |
+  |    Pimlico bundler <------'          |
+  |      wraps UserOp in a regular       |
+  |      ECDSA tx and calls:             |
+  |                           |          |
+  |                           '-------> EntryPoint.handleOps()
+  |                                      |-> HCAAccount.validateUserOp()
+  |                                      |     verify Merkle proof
+  |                                      |     dispatch to verifier[version]
+  |                                      |     LamportVerifier.verify() <-- PQC check
+  |                                      |-> HCAAccount.execute()
+  |                                      |     send ETH to recipient
 ```
 
 ## Version Bytes

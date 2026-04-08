@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-/// @title Minimal ERC-4337 Account Interface
+/// @title ERC-4337 v0.6 Account Interface
+/// @dev UserOperation struct must match the EntryPoint's definition exactly,
+///      including initCode and paymasterAndData, so the function selector
+///      and ABI encoding are compatible.
 struct UserOperation {
     address sender;
     uint256 nonce;
+    bytes initCode;
     bytes callData;
     uint256 callGasLimit;
     uint256 verificationGasLimit;
     uint256 preVerificationGas;
     uint256 maxFeePerGas;
     uint256 maxPriorityFeePerGas;
+    bytes paymasterAndData;
     bytes signature;
 }
 
