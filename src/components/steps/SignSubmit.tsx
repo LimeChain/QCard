@@ -13,7 +13,8 @@ import { encodeFunctionData, encodeAbiParameters, parseAbiParameters, parseEther
 import { signMessage as lamportSign, generateLeafKeypair, buildMerkleProof } from "@/lib/crypto"
 import { keccak256 } from "@/lib/crypto"
 import { hcaAccountAbi } from "@/lib/contracts/abis"
-import { sendUserOperation, getUserOperationReceipt, type UserOperationV06 } from "@/lib/bundler/pimlico"
+import { sendUserOperation, getUserOperationReceipt, estimateUserOpGas, type UserOperationV06 } from "@/lib/bundler/pimlico"
+import { getUserOpHash } from "@/lib/bundler/userop"
 
 function bytesToHex(bytes: Uint8Array): `0x${string}` {
   return ('0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`
@@ -43,7 +44,8 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
   const [amount, setAmount] = React.useState("0.001")
   const [isSigning, setIsSigning] = React.useState(false)
   const [signatureHex, setSignatureHex] = React.useState("")
-  const [sigMeta, setSigMeta] = React.useState<{ scheme: string; leafIndex: number; proofLen: number; sigBytes: number } | null>(null)
+  const [sigMeta, setSigMeta] = React.useState<{ scheme: string; leafIndex: number; proofLen: number; sigBytes: number; userOpHash: string } | null>(null)
+  const [builtUserOp, setBuiltUserOp] = React.useState<UserOperationV06 | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [submitted, setSubmitted] = React.useState(false)
   const [userOpHashResult, setUserOpHashResult] = React.useState("")
@@ -84,11 +86,39 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         args: [toAddress as `0x${string}`, parseEther(amount), '0x'],
       })
 
-      // Hash for signing
-      const msgHashInput = new TextEncoder().encode(
-        `${accountAddr}:${wizard.authRoot}:${selectedLeafIndex}:${callData}`
-      )
-      const msgHash = keccak256(msgHashInput)
+      // Read on-chain nonce
+      const onChainNonce = publicClient
+        ? await publicClient.readContract({
+            address: accountAddr as `0x${string}`,
+            abi: hcaAccountAbi,
+            functionName: 'nonce',
+          })
+        : BigInt(0)
+
+      // Build a preliminary UserOp with dummy signature to estimate gas
+      const dummyUserOp: UserOperationV06 = {
+        sender: accountAddr as `0x${string}`,
+        nonce: viemToHex(BigInt(onChainNonce as bigint)),
+        initCode: '0x',
+        callData: callData as `0x${string}`,
+        callGasLimit: viemToHex(BigInt(500_000)),
+        verificationGasLimit: viemToHex(BigInt(3_500_000)),
+        preVerificationGas: viemToHex(BigInt(100_000)),
+        maxFeePerGas: viemToHex(BigInt(20_000_000_000)), // 20 gwei
+        maxPriorityFeePerGas: viemToHex(BigInt(2_000_000_000)), // 2 gwei
+        paymasterAndData: '0x',
+        signature: '0x' as `0x${string}`, // dummy — will be replaced
+      }
+
+      // Compute the REAL userOpHash that the EntryPoint will pass to validateUserOp
+      const userOpHash = getUserOpHash(dummyUserOp, 11155111)
+
+      // Convert hex hash to Uint8Array for the crypto libs
+      const msgHash = new Uint8Array(32)
+      const hashClean = userOpHash.slice(2)
+      for (let i = 0; i < 32; i++) {
+        msgHash[i] = parseInt(hashClean.slice(i * 2, i * 2 + 2), 16)
+      }
 
       let fullSig: `0x${string}`
       let proofLen = 0
@@ -183,8 +213,11 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         return
       }
 
+      // Store the complete UserOp with the real signature
+      const finalUserOp: UserOperationV06 = { ...dummyUserOp, signature: fullSig }
+      setBuiltUserOp(finalUserOp)
       setSignatureHex(fullSig)
-      setSigMeta({ scheme: leaf.scheme, leafIndex: selectedLeafIndex, proofLen, sigBytes })
+      setSigMeta({ scheme: leaf.scheme, leafIndex: selectedLeafIndex, proofLen, sigBytes, userOpHash })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signing failed')
     } finally {
@@ -193,7 +226,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
   }
 
   const handleSubmit = async () => {
-    if (!signatureHex || !accountAddr) return
+    if (!signatureHex || !accountAddr || !builtUserOp) return
     setError(null)
     setIsSubmitting(true)
 
@@ -203,27 +236,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       if (useBundler) {
         wizard.setPimlicoApiKey(pimlicoKey)
 
-        const callData = encodeFunctionData({
-          abi: hcaAccountAbi,
-          functionName: 'execute',
-          args: [toAddress as `0x${string}`, parseEther(amount), '0x'],
-        })
-
-        const userOp: UserOperationV06 = {
-          sender: accountAddr as `0x${string}`,
-          nonce: '0x0',
-          initCode: '0x',
-          callData: callData as `0x${string}`,
-          callGasLimit: viemToHex(BigInt(500_000)),
-          verificationGasLimit: viemToHex(BigInt(3_500_000)),
-          preVerificationGas: viemToHex(BigInt(100_000)),
-          maxFeePerGas: '0x0',
-          maxPriorityFeePerGas: '0x0',
-          paymasterAndData: '0x',
-          signature: signatureHex as `0x${string}`,
-        }
-
-        const opHash = await sendUserOperation(userOp, pimlicoKey, 11155111)
+        const opHash = await sendUserOperation(builtUserOp, pimlicoKey, 11155111)
         setUserOpHashResult(opHash)
 
         const receipt = await getUserOperationReceipt(opHash, pimlicoKey, 11155111)
@@ -272,6 +285,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         <CardContent className="space-y-6">
            <div className="space-y-3">
              <h4 className="text-sm font-medium">1. Select Leaf Key</h4>
+             <p className="text-xs text-muted">Each leaf is a one-time signing key in your Merkle tree. Green = Lamport (hash-based), Blue = Falcon (lattice-based), Orange = ECDSA (classical). Used leaves are grayed out.</p>
              <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
                 {leaves.map((leaf) => (
                   <button
@@ -300,6 +314,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
 
            <div className="space-y-4 pt-4 border-t border-border">
              <h4 className="text-sm font-medium">2. Transaction Details</h4>
+             <p className="text-xs text-muted">Enter the recipient and amount. Clicking "Sign" builds an ERC-4337 UserOperation, computes the EntryPoint&apos;s userOpHash, and signs it with the selected PQC key — all in your browser.</p>
              <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
                   <label className="text-xs text-muted">To Address</label>
@@ -330,6 +345,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                    <div><span className="text-muted">Leaf index:</span> <span className="font-mono">{sigMeta.leafIndex}</span></div>
                    <div><span className="text-muted">Merkle proof:</span> <span className="font-mono">{sigMeta.proofLen} hashes</span></div>
                    <div className="col-span-2"><span className="text-muted">Total payload:</span> <span className="font-mono">{sigMeta.sigBytes.toLocaleString()} bytes</span></div>
+                   <div className="col-span-2"><span className="text-muted">Signed userOpHash:</span> <span className="font-mono text-[10px] break-all">{sigMeta.userOpHash}</span></div>
                  </div>
                  <button onClick={() => setShowJson(!showJson)} className="text-xs text-accent hover:underline flex items-center gap-1 mt-1">
                    {showJson ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -346,6 +362,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
 
            <div className="space-y-4 pt-4 border-t border-border">
              <h4 className="text-sm font-medium">3. Submit</h4>
+             <p className="text-xs text-muted">The signed UserOperation is sent to the bundler, which wraps it in a transaction and calls the EntryPoint. The EntryPoint calls your HCA account&apos;s validateUserOp(), which verifies the PQC signature on-chain.</p>
 
              {pimlicoKey ? (
                <div className="p-3 border border-green-600/40 bg-green-900/10 rounded-lg flex items-start gap-3">
