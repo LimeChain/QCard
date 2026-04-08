@@ -23,7 +23,7 @@ cd pqc-hca-poc
 npm install
 
 cp .env.example .env.local
-# Fill in contract addresses (see Deployed Addresses below) and Pimlico API key
+# Fill in contract addresses (deploy your own or get from your team) and Pimlico API key
 
 npm run dev
 # Open http://localhost:3000
@@ -68,16 +68,6 @@ forge script script/DeployHCA.s.sol \
 After deploying, run `./scripts/wire.sh <factory> <lamport> <ecdsa> <falcon>` to update `.env.local`, or fill it in manually.
 
 Verify deployment: `./scripts/verify.sh`
-
-## Deployed Addresses (Base Sepolia)
-
-| Contract | Address |
-|----------|---------|
-| EntryPoint v0.6 | `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789` |
-| HCAFactory | `0xfbe3FECe2851fA9c8B077fEfFF93B871c32F683D` |
-| LamportVerifier | `0xE03871084c84d999A71932E5CA6bcDe585Fed583` |
-| ECDSAVerifier | `0xBc009eA3c3BC09C33334E1dA532cD659281D96D6` |
-| FalconVerifier | Not yet deployed (requires ETHFALCON engine on Base Sepolia) |
 
 ## Architecture
 
