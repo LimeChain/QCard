@@ -8,10 +8,24 @@ import { Deploy } from "@/components/steps/Deploy"
 import { Fund } from "@/components/steps/Fund"
 import { SignSubmit } from "@/components/steps/SignSubmit"
 import { Verify } from "@/components/steps/Verify"
-import { WizardProvider } from "@/lib/store"
+import { WizardProvider, useWizard } from "@/lib/store"
+import { Button } from "@/components/ui/Button"
+import { RotateCcw } from "lucide-react"
 
-export default function Home() {
-  const [currentStep, setCurrentStep] = React.useState(0)
+const STEP_KEY = 'hca-wizard-step'
+
+function WizardContent() {
+  const [currentStep, setCurrentStep] = React.useState(() => {
+    if (typeof window === 'undefined') return 0
+    const saved = localStorage.getItem(STEP_KEY)
+    return saved ? Math.min(parseInt(saved, 10), 5) : 0
+  })
+
+  const wizard = useWizard()
+
+  React.useEffect(() => {
+    localStorage.setItem(STEP_KEY, String(currentStep))
+  }, [currentStep])
 
   const handleNext = () => {
     setCurrentStep((prev) => Math.min(prev + 1, 5))
@@ -21,35 +35,60 @@ export default function Home() {
     setCurrentStep((prev) => Math.max(prev - 1, 0))
   }
 
+  const handleReset = () => {
+    wizard.reset()
+    setCurrentStep(0)
+    localStorage.removeItem(STEP_KEY)
+  }
+
+  return (
+    <main className="min-h-screen bg-background text-foreground flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-3xl space-y-8">
+
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight">HCA Interactive Console</h1>
+          <p className="text-muted">Quantum-resistant Smart Account Deployment & Management</p>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="flex-1">
+            <StepIndicator currentStepIndex={currentStep} />
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleReset}
+            title="Start over"
+            className="text-muted hover:text-red-400 shrink-0"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </Button>
+        </div>
+
+        <div className="mt-8 transition-all duration-300">
+          {currentStep === 0 && <ConfigureAccount onNext={handleNext} />}
+          {currentStep === 1 && <GenerateKeys onNext={handleNext} onBack={handleBack} />}
+          {currentStep === 2 && <Deploy onNext={handleNext} onBack={handleBack} />}
+          {currentStep === 3 && <Fund onNext={handleNext} onBack={handleBack} />}
+          {currentStep === 4 && <SignSubmit onNext={handleNext} onBack={handleBack} />}
+          {currentStep === 5 && (
+            <Verify
+              onNext={handleNext}
+              onBack={handleBack}
+              setCurrentStep={setCurrentStep}
+            />
+          )}
+        </div>
+
+      </div>
+    </main>
+  )
+}
+
+export default function Home() {
   return (
     <WizardProvider>
-      <main className="min-h-screen bg-background text-foreground flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="w-full max-w-3xl space-y-8">
-
-          <div className="text-center space-y-2">
-             <h1 className="text-3xl font-bold tracking-tight">HCA Interactive Console</h1>
-             <p className="text-muted">Quantum-resistant Smart Account Deployment & Management</p>
-          </div>
-
-          <StepIndicator currentStepIndex={currentStep} />
-
-          <div className="mt-8 transition-all duration-300">
-             {currentStep === 0 && <ConfigureAccount onNext={handleNext} />}
-             {currentStep === 1 && <GenerateKeys onNext={handleNext} onBack={handleBack} />}
-             {currentStep === 2 && <Deploy onNext={handleNext} onBack={handleBack} />}
-             {currentStep === 3 && <Fund onNext={handleNext} onBack={handleBack} />}
-             {currentStep === 4 && <SignSubmit onNext={handleNext} onBack={handleBack} />}
-             {currentStep === 5 && (
-               <Verify
-                 onNext={handleNext}
-                 onBack={handleBack}
-                 setCurrentStep={setCurrentStep}
-               />
-             )}
-          </div>
-
-        </div>
-      </main>
+      <WizardContent />
     </WizardProvider>
   )
 }

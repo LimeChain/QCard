@@ -27,7 +27,10 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
   }
 
   const handleDeploy = async () => {
-    if (!walletClient || !publicClient || !address) return
+    if (!walletClient || !publicClient || !address) {
+      setDeployError('Wallet not ready. Try disconnecting and reconnecting.')
+      return
+    }
     if (!wizard.authRoot) {
       setDeployError('No auth root generated. Go back to Step 2.')
       return
@@ -118,7 +121,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
                      <p className="text-xs text-muted font-mono">{address?.slice(0,6)}...{address?.slice(-4)}</p>
                    </div>
                  </div>
-                 <Button variant="outline" size="sm" onClick={() => disconnect()}>Disconnect</Button>
+                 <Button variant="outline" size="sm" onClick={() => { disconnect(); setDeployError(null) }}>Disconnect</Button>
              </div>
           )}
 

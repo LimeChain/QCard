@@ -106,9 +106,6 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
              <Button className="w-full" size="lg" onClick={handleFund} disabled={isFunding || hasFunds || !accountAddress}>
                 {isFunding ? "Sending Transaction..." : hasFunds ? "Funded" : "Send 0.01 ETH from Wallet"}
              </Button>
-             <a href="https://www.coinbase.com/faucets/base-ethereum-goerli-faucet" target="_blank" rel="noopener noreferrer" className="text-xs text-center text-accent hover:underline flex items-center justify-center gap-1 mt-2">
-               Get real testnet ETH from Base Faucet <ExternalLink className="w-3 h-3" />
-             </a>
            </div>
 
         </CardContent>
