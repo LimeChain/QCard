@@ -197,7 +197,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
               </div>
               <div className="flex gap-2 text-xs mt-2 justify-end">
                 <a href={basescanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-muted hover:text-accent transition-colors">
-                  View on BaseScan <ExternalLink className="w-3 h-3" />
+                  View on Etherscan <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
             </div>

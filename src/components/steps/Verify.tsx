@@ -54,7 +54,7 @@ export function Verify({
              <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-muted">Transaction Hash</span>
                 <a href={basescanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm text-accent hover:underline">
-                  View on BaseScan <ExternalLink className="w-3 h-3" />
+                  View on Etherscan <ExternalLink className="w-3 h-3" />
                 </a>
              </div>
              <p className="font-mono text-sm mt-2 break-all">{txHash || 'N/A'}</p>
@@ -93,11 +93,11 @@ export function Verify({
       </Card>
 
       <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
-         <Button variant="outline" size="lg" onClick={() => setCurrentStep(4)}>
-            Sign Another Transaction
-         </Button>
-         <Button size="lg" onClick={() => { wizard.reset(); setCurrentStep(0) }}>
+         <Button variant="outline" size="lg" onClick={() => { wizard.reset(); setCurrentStep(0) }}>
             Create New Account
+         </Button>
+         <Button size="lg" onClick={() => setCurrentStep(4)}>
+            Sign Another Transaction
          </Button>
       </div>
     </div>
