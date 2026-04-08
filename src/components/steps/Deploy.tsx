@@ -18,8 +18,10 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
   const wizard = useWizard()
 
   const [isDeploying, setIsDeploying] = React.useState(false)
-  const [isDeployed, setIsDeployed] = React.useState(false)
   const [deployError, setDeployError] = React.useState<string | null>(null)
+
+  // Derive from persisted wizard state — survives refresh
+  const isDeployed = !!wizard.deployedAddresses
 
   const factoryConfigured = (ADDRESSES.hcaFactory as string) !== ''
 
@@ -78,7 +80,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
         falconVerifier: ADDRESSES.falconVerifier,
       })
 
-      setIsDeployed(true)
+      // isDeployed now derived from wizard.deployedAddresses
     } catch (err) {
       setDeployError(err instanceof Error ? err.message : 'Deployment failed')
     } finally {

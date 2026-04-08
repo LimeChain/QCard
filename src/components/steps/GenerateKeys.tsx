@@ -26,8 +26,10 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
   const [password, setPassword] = React.useState("")
   const [isGenerating, setIsGenerating] = React.useState(false)
   const [progress, setProgress] = React.useState(0)
-  const [complete, setComplete] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+
+  // Derive "complete" from persisted wizard state — survives refresh
+  const complete = !!(wizard.masterSeed && wizard.authRoot)
 
   const leafCount = wizard.leafCount || 16
 
@@ -77,7 +79,6 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
       })
 
       setProgress(100)
-      setComplete(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Key generation failed')
     } finally {
