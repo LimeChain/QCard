@@ -347,6 +347,28 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
            <div className="space-y-4 pt-4 border-t border-border">
              <h4 className="text-sm font-medium">3. Submit</h4>
 
+             {pimlicoKey ? (
+               <div className="p-3 border border-green-600/40 bg-green-900/10 rounded-lg flex items-start gap-3">
+                 <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />
+                 <div className="text-xs">
+                   <p className="font-medium text-green-400">ERC-4337 Bundler Mode</p>
+                   <p className="text-muted mt-0.5">
+                     UserOperation → Pimlico bundler → EntryPoint → <code className="text-[10px] bg-[#161b22] px-1 rounded">validateUserOp()</code> → PQC signature verified on-chain → <code className="text-[10px] bg-[#161b22] px-1 rounded">execute()</code>
+                   </p>
+                 </div>
+               </div>
+             ) : (
+               <div className="p-3 border border-yellow-600/40 bg-yellow-900/10 rounded-lg flex items-start gap-3">
+                 <div className="w-2 h-2 rounded-full bg-yellow-500 mt-1.5 shrink-0" />
+                 <div className="text-xs">
+                   <p className="font-medium text-yellow-400">Direct Wallet Mode (no PQC verification)</p>
+                   <p className="text-muted mt-0.5">
+                     MetaMask signs a regular transaction calling <code className="text-[10px] bg-[#161b22] px-1 rounded">execute()</code> directly. The Lamport signature above is generated but <strong>not verified on-chain</strong>. Set <code className="text-[10px] bg-[#161b22] px-1 rounded">NEXT_PUBLIC_PIMLICO_API_KEY</code> in <code className="text-[10px] bg-[#161b22] px-1 rounded">.env.local</code> for the real ERC-4337 flow.
+                   </p>
+                 </div>
+               </div>
+             )}
+
              {error && (
                <p className="text-sm text-red-400">{error}</p>
              )}
@@ -363,13 +385,10 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                   : submitted
                     ? "Submitted"
                     : pimlicoKey
-                      ? "Submit via Bundler"
-                      : "Direct Call via Wallet"
+                      ? "Submit via Bundler (PQC verified)"
+                      : "Direct Call (no PQC verification)"
                 }
              </Button>
-             <p className="text-xs text-muted text-center">
-               {pimlicoKey ? 'Bundler: Pimlico (Sepolia)' : 'No Pimlico key — will call execute() directly from connected wallet.'}
-             </p>
            </div>
 
            {submitted && (
