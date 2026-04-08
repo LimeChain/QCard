@@ -1,5 +1,5 @@
 /**
- * Contract addresses on Base Sepolia.
+ * Contract addresses on Sepolia.
  * Read from NEXT_PUBLIC_* environment variables.
  * Set them in .env.local (see .env.example).
  */

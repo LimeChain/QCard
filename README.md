@@ -4,7 +4,7 @@ Interactive wizard for creating and using quantum-resistant Ethereum accounts. I
 
 ## What It Does
 
-A 6-step browser wizard that creates a quantum-resistant smart account on Base Sepolia:
+A 6-step browser wizard that creates a quantum-resistant smart account on Sepolia:
 
 1. **Configure** -- pick signature schemes per leaf (Lamport, Falcon, ECDSA)
 2. **Generate Keys** -- browser-side keygen via CSPRNG + keccak256 (seed never leaves the browser)
@@ -41,7 +41,7 @@ npm run dev
 
 ## Deploy Contracts
 
-Requires [Foundry](https://getfoundry.sh/) and Base Sepolia ETH.
+Requires [Foundry](https://getfoundry.sh/) and Sepolia ETH.
 
 ```bash
 curl -L https://foundry.paradigm.xyz | bash && foundryup
@@ -49,7 +49,7 @@ curl -L https://foundry.paradigm.xyz | bash && foundryup
 cd contracts && forge install && cd ..
 
 export PRIVATE_KEY=0xYOUR_KEY
-export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
+export SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_KEY
 
 ./scripts/deploy.sh
 ```
@@ -59,7 +59,7 @@ Or manually:
 ```bash
 cd contracts
 forge script script/DeployHCA.s.sol \
-  --rpc-url $BASE_SEPOLIA_RPC_URL \
+  --rpc-url $SEPOLIA_RPC_URL \
   --broadcast \
   --sender $(cast wallet address --private-key $PRIVATE_KEY) \
   --private-key $PRIVATE_KEY
@@ -72,7 +72,7 @@ Verify deployment: `./scripts/verify.sh`
 ## Architecture
 
 ```
-Browser (Next.js)                    Base Sepolia
+Browser (Next.js)                    Sepolia
   |                                      |
   |-- 1. Generate seed (CSPRNG)          |
   |-- 2. Derive Lamport keypairs         |

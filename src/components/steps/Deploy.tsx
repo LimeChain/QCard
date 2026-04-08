@@ -36,7 +36,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
     if (!factoryConfigured) {
       setDeployError(
         `Factory not deployed. Set ADDRESSES.hcaFactory in contracts/addresses.ts. ` +
-        `Expected: a deployed HCAFactory on Base Sepolia.`
+        `Expected: a deployed HCAFactory on Sepolia.`
       )
       return
     }
@@ -82,7 +82,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
 
   const accountAddr = wizard.deployedAddresses?.hcaAccount
   const basescanUrl = accountAddr
-    ? `https://sepolia.basescan.org/address/${accountAddr}`
+    ? `https://sepolia.etherscan.io/address/${accountAddr}`
     : '#'
 
   return (
@@ -96,7 +96,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
             </div>
             <Badge variant="outline" className="flex gap-1 items-center bg-[#161b22]">
               <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-              Base Sepolia
+              Sepolia
             </Badge>
           </div>
         </CardHeader>
@@ -129,7 +129,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
                 <p className="font-medium text-yellow-400">Contracts not deployed</p>
                 <p className="text-muted mt-1">
                   Set the factory address in <code className="text-xs bg-[#161b22] px-1 py-0.5 rounded">src/lib/contracts/addresses.ts</code> after
-                  deploying the HCAFactory to Base Sepolia.
+                  deploying the HCAFactory to Sepolia.
                 </p>
               </div>
             </div>

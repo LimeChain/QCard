@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Deploy HCA contracts to Base Sepolia and write addresses to .env.local
+# Deploy HCA contracts to Sepolia and write addresses to .env.local
 # Usage: ./scripts/deploy.sh
-# Requires: PRIVATE_KEY and BASE_SEPOLIA_RPC_URL set in environment or .env.local
+# Requires: PRIVATE_KEY and SEPOLIA_RPC_URL set in environment or .env.local
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -20,17 +20,17 @@ fi
 
 # Check required vars
 : "${PRIVATE_KEY:?Set PRIVATE_KEY in .env.local or environment}"
-: "${BASE_SEPOLIA_RPC_URL:?Set BASE_SEPOLIA_RPC_URL in .env.local or environment}"
+: "${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL in .env.local or environment}"
 
 SENDER=$($CAST wallet address --private-key "$PRIVATE_KEY")
 echo "Deployer: $SENDER"
-echo "RPC: $BASE_SEPOLIA_RPC_URL"
+echo "RPC: $SEPOLIA_RPC_URL"
 echo ""
 
 # Deploy
 cd "$CONTRACTS_DIR"
 OUTPUT=$($FORGE script script/DeployHCA.s.sol \
-  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --rpc-url "$SEPOLIA_RPC_URL" \
   --broadcast \
   --sender "$SENDER" \
   --private-key "$PRIVATE_KEY" 2>&1)

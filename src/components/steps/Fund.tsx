@@ -82,7 +82,7 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
 
                  <div>
                    <div className="flex justify-between items-center mb-1">
-                     <label className="text-xs uppercase text-muted tracking-wider block">Balance (Base Sepolia)</label>
+                     <label className="text-xs uppercase text-muted tracking-wider block">Balance (Sepolia)</label>
                      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => refetchBalance()} disabled={isLoadingBalance}>
                        <RefreshCw className="w-3 h-3 mr-1" /> Refresh
                      </Button>

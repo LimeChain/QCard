@@ -34,7 +34,7 @@ export function Verify({
 
   const txHash = wizard.lastTxHash ?? ''
   const basescanUrl = txHash
-    ? `https://sepolia.basescan.org/tx/${txHash}`
+    ? `https://sepolia.etherscan.io/tx/${txHash}`
     : '#'
 
   return (

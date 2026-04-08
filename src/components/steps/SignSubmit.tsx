@@ -153,10 +153,10 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
           signature: signatureHex as `0x${string}`,
         }
 
-        const opHash = await sendUserOperation(userOp, pimlicoKey, 84532)
+        const opHash = await sendUserOperation(userOp, pimlicoKey, 11155111)
         setUserOpHashResult(opHash)
 
-        const receipt = await getUserOperationReceipt(opHash, pimlicoKey, 84532)
+        const receipt = await getUserOperationReceipt(opHash, pimlicoKey, 11155111)
         if (receipt?.transactionHash) {
           wizard.setLastTxHash(receipt.transactionHash)
         }

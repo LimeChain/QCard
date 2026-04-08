@@ -18,13 +18,13 @@ else
   exit 1
 fi
 
-RPC="${BASE_SEPOLIA_RPC_URL:-https://sepolia.base.org}"
+RPC="${SEPOLIA_RPC_URL:-https://sepolia.infura.io/v3/YOUR_KEY}"
 FACTORY="$NEXT_PUBLIC_HCA_FACTORY"
 LAMPORT="$NEXT_PUBLIC_LAMPORT_VERIFIER"
 ECDSA="$NEXT_PUBLIC_ECDSA_VERIFIER"
 FALCON="$NEXT_PUBLIC_FALCON_VERIFIER"
 
-echo "=== Verifying contracts on Base Sepolia ==="
+echo "=== Verifying contracts on Sepolia ==="
 echo "RPC: $RPC"
 echo ""
 
