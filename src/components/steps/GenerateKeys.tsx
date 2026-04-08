@@ -3,14 +3,13 @@ import { Button } from "../ui/Button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "../ui/Card"
 import { Input } from "../ui/Input"
 import { Lock, Download, Key } from "lucide-react"
-import { useWizard } from "@/lib/store"
+import { useWizard, type FalconLeafKey } from "@/lib/store"
 import {
   generateMasterSeed,
-  generateAccountRoots,
-  keccak256Hex,
   encryptSeed,
   downloadSeedFile,
 } from "@/lib/crypto"
+import { generateHCALeaves, buildHCAAccountRoot } from "@/lib/crypto/hca-keygen"
 
 function toHex(bytes: Uint8Array): string {
   return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
@@ -47,19 +46,22 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
       setProgress(10)
       const masterSeed = generateMasterSeed()
 
-      // Step 2: Derive all leaf roots and the account root
-      // This is CPU-intensive for large trees, so we yield to the UI between leaves
+      // Step 2: Generate multi-scheme leaf data
       setProgress(20)
 
-      // Run keygen in a zero-delay timeout to let the progress bar render
-      const { leafRoots, accountRoot } = await new Promise<{
-        leafRoots: Uint8Array[]
-        accountRoot: Uint8Array
-      }>((resolve) => {
+      const leafData = await new Promise<ReturnType<typeof generateHCALeaves>>((resolve) => {
         setTimeout(() => {
-          resolve(generateAccountRoots(masterSeed, leafCount))
+          resolve(generateHCALeaves(masterSeed, wizard.leaves))
         }, 0)
       })
+
+      setProgress(50)
+
+      // Build account Merkle tree from leaf hashes
+      const { leafHashes, accountRoot } = buildHCAAccountRoot(leafData)
+
+      // Also compute legacy leafRoots for Lamport leaves (needed for Lamport signing)
+      const leafRoots = leafData.map(l => l.leafHash)
 
       setProgress(70)
 
@@ -70,12 +72,24 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
 
       const authRootHex = toHex(accountRoot)
 
+      // Extract Falcon keys for persistence
+      const falconKeys: FalconLeafKey[] = leafData
+        .filter(l => l.falconSecretKey)
+        .map(l => ({
+          leafIndex: l.index,
+          publicKeyHex: toHex(l.falconPublicKey!),
+          secretKeyHex: toHex(l.falconSecretKey!),
+        }))
+
       // Store everything in wizard context
       wizard.setKeygenResult({
         masterSeed,
         encryptedSeed: encrypted,
         authRoot: authRootHex,
         leafRoots,
+        leafHashes,
+        falconKeys,
+        ecdsaAddress: null, // ECDSA address set when wallet connects
       })
 
       setProgress(100)

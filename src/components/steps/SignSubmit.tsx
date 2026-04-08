@@ -11,6 +11,7 @@ import { getWalletClient } from "wagmi/actions"
 import { config } from "@/lib/wagmi"
 import { encodeFunctionData, encodeAbiParameters, parseAbiParameters, parseEther, toHex as viemToHex } from "viem"
 import { signMessage as lamportSign, generateLeafKeypair, buildMerkleProof } from "@/lib/crypto"
+import { buildHCAMerkleProof } from "@/lib/crypto/hca-keygen"
 import { keccak256 } from "@/lib/crypto"
 import { hcaAccountAbi } from "@/lib/contracts/abis"
 import { sendUserOperation, getUserOperationReceipt, estimateUserOpGas, type UserOperationV06 } from "@/lib/bundler/pimlico"
@@ -133,7 +134,10 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
 
         const pubKeyHashesHex = bytes32ArrayToHex(result.publicKeyHashes)
         const lamportSigHex = bytes32ArrayToHex(result.signature)
-        const merkleProofHex = bytes32ArrayToHex(result.merkleProof)
+        // Use HCA leaf hashes for the Merkle proof (matches authRoot with version-prefixed leaves)
+        const merkleProofHex = bytes32ArrayToHex(
+          wizard.leafHashes ? buildHCAMerkleProof(wizard.leafHashes, selectedLeafIndex) : result.merkleProof
+        )
         proofLen = merkleProofHex.length
 
         const commitment = encodeAbiParameters(
@@ -154,16 +158,25 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         sigBytes = (fullSig.length - 2) / 2
 
       } else if (leaf.scheme === 'Falcon') {
-        // Use js-fn-dsa for browser Falcon signing
-        const { generateFalconKeypair, signFalcon } = await import('@/lib/crypto/falcon')
+        // Use the stored Falcon key from tree build time
+        const { signFalcon } = await import('@/lib/crypto/falcon')
 
-        const { publicKey, secretKey } = generateFalconKeypair()
+        const falconKey = wizard.falconKeys.find(k => k.leafIndex === selectedLeafIndex)
+        if (!falconKey) {
+          setError(`No Falcon key found for leaf ${selectedLeafIndex}. Regenerate keys.`)
+          setIsSigning(false)
+          return
+        }
+
+        // Convert hex back to Uint8Array
+        const publicKey = new Uint8Array(falconKey.publicKeyHex.slice(2).match(/.{2}/g)!.map(b => parseInt(b, 16)))
+        const secretKey = new Uint8Array(falconKey.secretKeyHex.slice(2).match(/.{2}/g)!.map(b => parseInt(b, 16)))
         const falconSig = signFalcon(secretKey, msgHash)
 
         const pubKeyHex = bytesToHex(publicKey)
         const falconSigHex = bytesToHex(falconSig)
         const merkleProofHex = bytes32ArrayToHex(
-          buildMerkleProof(wizard.leafRoots!, selectedLeafIndex)
+          wizard.leafHashes ? buildHCAMerkleProof(wizard.leafHashes, selectedLeafIndex) : []
         )
         proofLen = merkleProofHex.length
 
@@ -191,7 +204,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         const ecdsaSig = await walletClient.signMessage({ message: { raw: msgHash } })
 
         const merkleProofHex = bytes32ArrayToHex(
-          buildMerkleProof(wizard.leafRoots!, selectedLeafIndex)
+          wizard.leafHashes ? buildHCAMerkleProof(wizard.leafHashes, selectedLeafIndex) : []
         )
         proofLen = merkleProofHex.length
 

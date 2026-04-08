@@ -20,6 +20,12 @@ export interface DeployedAddresses {
   falconVerifier: string
 }
 
+export interface FalconLeafKey {
+  leafIndex: number
+  publicKeyHex: string
+  secretKeyHex: string
+}
+
 export interface WizardState {
   leafCount: number
   leaves: LeafConfig[]
@@ -27,6 +33,9 @@ export interface WizardState {
   encryptedSeed: string | null
   authRoot: string | null
   leafRoots: Uint8Array[] | null
+  leafHashes: Uint8Array[] | null
+  falconKeys: FalconLeafKey[]
+  ecdsaAddress: string | null
   deployedAddresses: DeployedAddresses | null
   lastTxHash: string | null
   pimlicoApiKey: string
@@ -39,6 +48,9 @@ interface WizardActions {
     encryptedSeed: string
     authRoot: string
     leafRoots: Uint8Array[]
+    leafHashes: Uint8Array[]
+    falconKeys: FalconLeafKey[]
+    ecdsaAddress: string | null
   }) => void
   setDeployedAddresses: (addresses: DeployedAddresses) => void
   setLastTxHash: (hash: string) => void
@@ -75,6 +87,9 @@ interface SerializedState {
   encryptedSeed: string | null
   authRoot: string | null
   leafRootsHex: string[] | null
+  leafHashesHex: string[] | null
+  falconKeys: FalconLeafKey[]
+  ecdsaAddress: string | null
   deployedAddresses: DeployedAddresses | null
   lastTxHash: string | null
   pimlicoApiKey: string
@@ -88,6 +103,9 @@ function serialize(state: WizardState): string {
     encryptedSeed: state.encryptedSeed,
     authRoot: state.authRoot,
     leafRootsHex: state.leafRoots ? state.leafRoots.map(toHex) : null,
+    leafHashesHex: state.leafHashes ? state.leafHashes.map(toHex) : null,
+    falconKeys: state.falconKeys,
+    ecdsaAddress: state.ecdsaAddress,
     deployedAddresses: state.deployedAddresses,
     lastTxHash: state.lastTxHash,
     pimlicoApiKey: state.pimlicoApiKey,
@@ -105,6 +123,9 @@ function deserialize(json: string): WizardState | null {
       encryptedSeed: s.encryptedSeed,
       authRoot: s.authRoot,
       leafRoots: s.leafRootsHex ? s.leafRootsHex.map(fromHex) : null,
+      leafHashes: s.leafHashesHex ? s.leafHashesHex.map(fromHex) : null,
+      falconKeys: s.falconKeys ?? [],
+      ecdsaAddress: s.ecdsaAddress ?? null,
       deployedAddresses: s.deployedAddresses,
       lastTxHash: s.lastTxHash,
       pimlicoApiKey: s.pimlicoApiKey ?? '',
@@ -125,6 +146,9 @@ const initialState: WizardState = {
   encryptedSeed: null,
   authRoot: null,
   leafRoots: null,
+  leafHashes: null,
+  falconKeys: [],
+  ecdsaAddress: null,
   deployedAddresses: null,
   lastTxHash: null,
   pimlicoApiKey: '',
@@ -162,13 +186,16 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
       setState(prev => ({ ...prev, leafCount, leaves }))
     },
 
-    setKeygenResult({ masterSeed, encryptedSeed, authRoot, leafRoots }) {
+    setKeygenResult({ masterSeed, encryptedSeed, authRoot, leafRoots, leafHashes, falconKeys, ecdsaAddress }) {
       setState(prev => ({
         ...prev,
         masterSeed,
         encryptedSeed,
         authRoot,
         leafRoots,
+        leafHashes,
+        falconKeys,
+        ecdsaAddress,
       }))
     },
 
