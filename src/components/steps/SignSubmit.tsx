@@ -233,6 +233,16 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
     const useBundler = pimlicoKey.length > 0
 
     try {
+      // Check account has ETH to pay for gas
+      if (publicClient) {
+        const balance = await publicClient.getBalance({ address: accountAddr as `0x${string}` })
+        if (balance === BigInt(0)) {
+          setError(`Account ${accountAddr.slice(0, 10)}... has 0 ETH. Go back to Step 4 (Fund) and send ETH to the account first.`)
+          setIsSubmitting(false)
+          return
+        }
+      }
+
       if (useBundler) {
         wizard.setPimlicoApiKey(pimlicoKey)
 
