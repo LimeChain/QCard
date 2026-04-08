@@ -44,6 +44,19 @@ function WizardContent() {
     localStorage.removeItem(STEP_KEY)
   }
 
+  if (!hydrated) {
+    return (
+      <main className="min-h-screen bg-background text-foreground flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-3xl space-y-8">
+          <div className="text-center space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight">HCA Interactive Console</h1>
+            <p className="text-muted">Quantum-resistant Smart Account Deployment & Management</p>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-background text-foreground flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-3xl space-y-8">
