@@ -113,10 +113,6 @@ Each leaf in the Merkle tree has a version byte that selects the verification sc
 
 One account can have leaves of different schemes. Start with ECDSA for backward compatibility, add Lamport/Falcon leaves for quantum resistance, then stop using ECDSA leaves when ready.
 
-## Related: Tutorial Book
-
-The [tutorial book](https://nutmeg-salmon-87sn.here.now/) walks through the PQC concepts step by step. The book's code lives locally in the `book/` folder of the parent project.
-
 ## License
 
 MIT
