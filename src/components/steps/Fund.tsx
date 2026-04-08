@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Button } from "../ui/Button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "../ui/Card"
+import { Input } from "../ui/Input"
 import { Copy, ExternalLink, RefreshCw, CheckCircle2 } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 import { useWizard } from "@/lib/store"
@@ -10,6 +11,7 @@ import { parseEther, formatEther } from "viem"
 export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => void }) {
   const wizard = useWizard()
   const accountAddress = wizard.deployedAddresses?.hcaAccount ?? ''
+  const [fundAmount, setFundAmount] = React.useState("0.01")
 
   const {
     data: balanceData,
@@ -45,10 +47,10 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
   }
 
   const handleFund = () => {
-    if (!accountAddress) return
+    if (!accountAddress || !fundAmount) return
     sendTransaction({
       to: accountAddress as `0x${string}`,
-      value: parseEther('0.01'),
+      value: parseEther(fundAmount),
     })
   }
 
@@ -102,10 +104,24 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
              <p className="text-sm text-red-400">{sendError.message}</p>
            )}
 
-           <div className="flex flex-col gap-2 border-t border-border pt-6">
-             <Button className="w-full" size="lg" onClick={handleFund} disabled={isFunding || hasFunds || !accountAddress}>
-                {isFunding ? "Sending Transaction..." : hasFunds ? "Funded" : "Send 0.01 ETH from Wallet"}
-             </Button>
+           <div className="flex flex-col gap-3 border-t border-border pt-6">
+             <div className="flex gap-3 items-end">
+               <div className="flex-1 space-y-1">
+                 <label className="text-xs text-muted">Amount (ETH)</label>
+                 <Input
+                   type="text"
+                   value={fundAmount}
+                   onChange={(e) => setFundAmount(e.target.value)}
+                   placeholder="0.01"
+                 />
+               </div>
+               <Button size="lg" onClick={handleFund} disabled={isFunding || !accountAddress || !fundAmount}>
+                  {isFunding ? "Sending..." : `Send ${fundAmount} ETH`}
+               </Button>
+             </div>
+             {hasFunds && (
+               <p className="text-xs text-green-400 text-center">Account is funded. You can send more or proceed to the next step.</p>
+             )}
            </div>
 
         </CardContent>
