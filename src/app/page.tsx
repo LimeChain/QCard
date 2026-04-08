@@ -15,17 +15,20 @@ import { RotateCcw } from "lucide-react"
 const STEP_KEY = 'hca-wizard-step'
 
 function WizardContent() {
-  const [currentStep, setCurrentStep] = React.useState(() => {
-    if (typeof window === 'undefined') return 0
-    const saved = localStorage.getItem(STEP_KEY)
-    return saved ? Math.min(parseInt(saved, 10), 5) : 0
-  })
-
+  const [currentStep, setCurrentStep] = React.useState(0)
+  const [hydrated, setHydrated] = React.useState(false)
   const wizard = useWizard()
 
+  // Restore step from localStorage AFTER hydration to avoid SSR mismatch
   React.useEffect(() => {
-    localStorage.setItem(STEP_KEY, String(currentStep))
-  }, [currentStep])
+    const saved = localStorage.getItem(STEP_KEY)
+    if (saved) setCurrentStep(Math.min(parseInt(saved, 10), 5))
+    setHydrated(true)
+  }, [])
+
+  React.useEffect(() => {
+    if (hydrated) localStorage.setItem(STEP_KEY, String(currentStep))
+  }, [currentStep, hydrated])
 
   const handleNext = () => {
     setCurrentStep((prev) => Math.min(prev + 1, 5))
