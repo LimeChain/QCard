@@ -130,7 +130,19 @@ export function generateHCALeaves(
 
     } else if (leaf.scheme === 'ECDSA') {
       if (!ecdsaAddress) {
-        throw new Error('ECDSA leaves require a connected wallet address')
+        // Use a placeholder — will fail at signing time if wallet not connected
+        // This allows keygen to proceed without a wallet connection
+        const placeholderAddr = '0x0000000000000000000000000000000000000000'
+        const commitment = abiEncodeAddress(placeholderAddr)
+        const leafHash = computeLeafHash(VERSION_ECDSA, commitment)
+        results.push({
+          index: leaf.index,
+          scheme: 'ECDSA',
+          version: VERSION_ECDSA,
+          leafHash,
+          ecdsaAddress: placeholderAddr,
+        })
+        continue
       }
       // commitment = abi.encode(address) = 32 bytes left-padded
       const commitment = abiEncodeAddress(ecdsaAddress)

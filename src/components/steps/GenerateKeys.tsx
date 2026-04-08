@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "../ui/Input"
 import { Lock, Download, Key } from "lucide-react"
 import { useWizard, type FalconLeafKey } from "@/lib/store"
+import { useAccount } from "wagmi"
 import {
   generateMasterSeed,
   encryptSeed,
@@ -22,6 +23,7 @@ function maskHex(hex: string): string {
 
 export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: () => void }) {
   const wizard = useWizard()
+  const { address: walletAddress } = useAccount()
   const [password, setPassword] = React.useState("")
   const [isGenerating, setIsGenerating] = React.useState(false)
   const [progress, setProgress] = React.useState(0)
@@ -42,6 +44,13 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
     setProgress(0)
 
     try {
+      // Check if ECDSA leaves need a wallet
+      const hasEcdsaLeaves = wizard.leaves.some(l => l.scheme === 'ECDSA')
+      if (hasEcdsaLeaves && !walletAddress) {
+        setError('ECDSA leaves require a connected wallet. Connect your wallet first (it will be used in the Deploy step), then generate keys.')
+        return
+      }
+
       // Step 1: Generate master seed (fast)
       setProgress(10)
       const masterSeed = generateMasterSeed()
@@ -49,9 +58,10 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
       // Step 2: Generate multi-scheme leaf data
       setProgress(20)
 
+      const ecdsaAddr = walletAddress ?? undefined
       const leafData = await new Promise<ReturnType<typeof generateHCALeaves>>((resolve) => {
         setTimeout(() => {
-          resolve(generateHCALeaves(masterSeed, wizard.leaves))
+          resolve(generateHCALeaves(masterSeed, wizard.leaves, ecdsaAddr))
         }, 0)
       })
 
@@ -89,7 +99,7 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
         leafRoots,
         leafHashes,
         falconKeys,
-        ecdsaAddress: null, // ECDSA address set when wallet connects
+        ecdsaAddress: walletAddress ?? null,
       })
 
       setProgress(100)
