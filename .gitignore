@@ -63,3 +63,5 @@ contracts/.github/
 contracts/.gitignore
 contracts/.gitmodules
 contracts/README.md
+contracts/broadcast/**
+contracts/foundry.lock
