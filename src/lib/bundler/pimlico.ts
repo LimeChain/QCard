@@ -26,7 +26,7 @@ export interface UserOpReceipt {
 }
 
 function bundlerUrl(apiKey: string, chainId: number): string {
-  return `https://api.pimlico.io/v1/${chainId}/rpc?apikey=${apiKey}`
+  return `https://api.pimlico.io/v2/${chainId}/rpc?apikey=${apiKey}`
 }
 
 async function rpc(url: string, method: string, params: unknown[]): Promise<unknown> {
@@ -43,7 +43,10 @@ async function rpc(url: string, method: string, params: unknown[]): Promise<unkn
 
   const json = await res.json()
   if (json.error) {
-    throw new Error(`Bundler RPC error: ${json.error.message ?? JSON.stringify(json.error)}`)
+    // Extract detailed error data if available
+    const errMsg = json.error.message ?? ''
+    const errData = json.error.data ? ` | Data: ${JSON.stringify(json.error.data)}` : ''
+    throw new Error(`Bundler RPC error: ${errMsg}${errData}`)
   }
   return json.result
 }

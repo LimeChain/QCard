@@ -259,6 +259,20 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       if (useBundler) {
         wizard.setPimlicoApiKey(pimlicoKey)
 
+        // First try gas estimation to get a better error if validation fails
+        try {
+          const gasEstimate = await estimateUserOpGas(builtUserOp, pimlicoKey, 11155111)
+          // Use the bundler's gas estimates
+          builtUserOp.callGasLimit = gasEstimate.callGasLimit
+          builtUserOp.verificationGasLimit = gasEstimate.verificationGasLimit
+          builtUserOp.preVerificationGas = gasEstimate.preVerificationGas
+        } catch (gasErr) {
+          const msg = gasErr instanceof Error ? gasErr.message : String(gasErr)
+          setError(`Gas estimation failed (validateUserOp likely reverts): ${msg}`)
+          setIsSubmitting(false)
+          return
+        }
+
         const opHash = await sendUserOperation(builtUserOp, pimlicoKey, 11155111)
         setUserOpHashResult(opHash)
 
