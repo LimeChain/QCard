@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0d1117;
+  --color-foreground: #c9d1d9;
+  --color-accent: #58a6ff;
+  --color-accent-hover: #3182ce;
+  --color-card: #161b22;
+  --color-border: #30363d;
+  --color-muted: #8b949e;
+  --color-success: #238636;
+  --color-error: #da3633;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: inherit;
+}
+
+/* Base custom styles */
+h1, h2, h3, h4, h5, h6 {
+  color: #ffffff;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: #ffffff;
+}
