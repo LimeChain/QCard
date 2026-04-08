@@ -3,17 +3,19 @@ import { Button } from "../ui/Button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/Card"
 import { Badge } from "../ui/Badge"
 import { Wallet, CheckCircle2, ExternalLink, AlertTriangle } from "lucide-react"
-import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi"
+import { useAccount, useConnect, useDisconnect, usePublicClient, useSwitchChain } from "wagmi"
 import { getWalletClient } from "wagmi/actions"
+import { sepolia } from "wagmi/chains"
 import { config } from "@/lib/wagmi"
 import { useWizard } from "@/lib/store"
 import { hcaFactoryAbi } from "@/lib/contracts/abis"
 import { ADDRESSES } from "@/lib/contracts/addresses"
 
 export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => void }) {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, chainId } = useAccount()
   const { connectors, connect } = useConnect()
   const { disconnect } = useDisconnect()
+  const { switchChain } = useSwitchChain()
   const publicClient = usePublicClient()
   const wizard = useWizard()
 
@@ -24,6 +26,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
   const isDeployed = !!wizard.deployedAddresses
 
   const factoryConfigured = (ADDRESSES.hcaFactory as string) !== ''
+  const wrongChain = isConnected && chainId !== sepolia.id
 
   const handleConnect = () => {
     connect({ connector: connectors[0] })
@@ -130,6 +133,21 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
              </div>
           )}
 
+          {wrongChain && (
+            <div className="flex items-center justify-between p-4 border border-yellow-600/40 bg-yellow-900/10 rounded-lg">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-yellow-400">Wrong network</p>
+                  <p className="text-muted">Connected to chain {chainId}. Switch to Sepolia.</p>
+                </div>
+              </div>
+              <Button size="sm" onClick={() => switchChain({ chainId: sepolia.id })}>
+                Switch
+              </Button>
+            </div>
+          )}
+
           {!factoryConfigured && (
             <div className="flex items-start gap-3 p-4 border border-yellow-600/40 bg-yellow-900/10 rounded-lg">
               <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5 shrink-0" />
@@ -150,7 +168,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
           <Button
             className="w-full"
             size="lg"
-            disabled={!isConnected || isDeploying || isDeployed || !factoryConfigured}
+            disabled={!isConnected || isDeploying || isDeployed || !factoryConfigured || wrongChain}
             onClick={handleDeploy}
           >
             {isDeploying ? "Deploying..." : isDeployed ? "Deployed Successfully" : "Deploy Contracts"}
