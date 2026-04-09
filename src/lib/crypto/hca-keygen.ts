@@ -137,18 +137,30 @@ export function buildFalconCommitment(pkCompact: string[]): Uint8Array {
   return abiEncodeUint256ArrayDynamic(pkCompact)
 }
 
+export interface KeygenProgress {
+  current: number
+  total: number
+  scheme: string
+  leafIndex: number
+}
+
 /**
  * Generate all leaf data for an HCA account tree.
  * Async because Falcon leaves call the Python backend.
+ * The optional onProgress callback fires before each leaf starts.
  */
 export async function generateHCALeaves(
   masterSeed: Uint8Array,
   leaves: LeafConfig[],
   ecdsaAddress?: string,
+  onProgress?: (p: KeygenProgress) => void,
 ): Promise<HCALeafData[]> {
   const results: HCALeafData[] = []
+  const total = leaves.length
 
-  for (const leaf of leaves) {
+  for (let idx = 0; idx < leaves.length; idx++) {
+    const leaf = leaves[idx]
+    onProgress?.({ current: idx + 1, total, scheme: leaf.scheme, leafIndex: leaf.index })
     if (leaf.scheme === 'Lamport') {
       const { publicKeyHashes } = generateLeafKeypair(masterSeed, leaf.index)
       const commitment = abiEncodeBytes32Array(publicKeyHashes)

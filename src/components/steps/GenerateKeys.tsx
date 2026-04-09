@@ -10,7 +10,7 @@ import {
   encryptSeed,
   downloadSeedFile,
 } from "@/lib/crypto"
-import { generateHCALeaves, buildHCAAccountRoot } from "@/lib/crypto/hca-keygen"
+import { generateHCALeaves, buildHCAAccountRoot, type KeygenProgress } from "@/lib/crypto/hca-keygen"
 
 function toHex(bytes: Uint8Array): string {
   return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
@@ -27,6 +27,7 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
   const [password, setPassword] = React.useState("")
   const [isGenerating, setIsGenerating] = React.useState(false)
   const [progress, setProgress] = React.useState(0)
+  const [progressLabel, setProgressLabel] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
 
   // Derive "complete" from persisted wizard state — survives refresh
@@ -56,13 +57,19 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
       const masterSeed = generateMasterSeed()
 
       // Step 2: Generate multi-scheme leaf data
-      // Falcon leaves hit /api/falcon/keygen, so this is async and may take a few seconds per leaf
-      setProgress(20)
+      // Falcon leaves hit /api/falcon/keygen (~2-3s each), so this shows per-leaf progress
+      setProgress(15)
+      setProgressLabel(`Generating leaf keys (0/${wizard.leaves.length})...`)
 
       const ecdsaAddr = walletAddress ?? undefined
-      const leafData = await generateHCALeaves(masterSeed, wizard.leaves, ecdsaAddr)
+      const leafData = await generateHCALeaves(masterSeed, wizard.leaves, ecdsaAddr, (p: KeygenProgress) => {
+        const pct = 15 + Math.round((p.current / p.total) * 55)
+        setProgress(pct)
+        setProgressLabel(`Leaf ${p.current}/${p.total} (${p.scheme})${p.scheme === 'Falcon' ? ' — calling backend...' : ''}`)
+      })
 
-      setProgress(50)
+      setProgress(75)
+      setProgressLabel('Building Merkle tree...')
 
       // Build account Merkle tree from leaf hashes
       const { leafHashes, accountRoot } = buildHCAAccountRoot(leafData)
@@ -73,9 +80,11 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
       setProgress(70)
 
       // Step 3: Encrypt seed
+      setProgressLabel('Encrypting seed...')
       const encrypted = await encryptSeed(masterSeed, password)
 
       setProgress(90)
+      setProgressLabel('Finalizing...')
 
       const authRootHex = toHex(accountRoot)
 
@@ -149,8 +158,13 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
               </Button>
 
               {isGenerating && (
-                <div className="w-full h-2 bg-card rounded-full overflow-hidden border border-border">
-                  <div className="h-full bg-accent transition-all duration-100" style={{ width: `${progress}%` }}></div>
+                <div className="space-y-1">
+                  <div className="w-full h-2 bg-card rounded-full overflow-hidden border border-border">
+                    <div className="h-full bg-accent transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                  </div>
+                  {progressLabel && (
+                    <p className="text-xs text-muted text-center">{progressLabel}</p>
+                  )}
                 </div>
               )}
             </div>
