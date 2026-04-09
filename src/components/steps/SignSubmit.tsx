@@ -158,32 +158,55 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         sigBytes = (fullSig.length - 2) / 2
 
       } else if (leaf.scheme === 'Falcon') {
-        // Use the stored Falcon key from tree build time
-        const { signFalcon } = await import('@/lib/crypto/falcon')
-
+        // Find the stored Falcon leaf record (leafSeed + pkCompact derived at keygen time)
         const falconKey = wizard.falconKeys.find(k => k.leafIndex === selectedLeafIndex)
         if (!falconKey) {
-          setError(`No Falcon key found for leaf ${selectedLeafIndex}. Regenerate keys.`)
+          setError(`No Falcon record for leaf ${selectedLeafIndex}. Regenerate keys.`)
           setIsSigning(false)
           return
         }
 
-        // Convert hex back to Uint8Array
-        const publicKey = new Uint8Array(falconKey.publicKeyHex.slice(2).match(/.{2}/g)!.map(b => parseInt(b, 16)))
-        const secretKey = new Uint8Array(falconKey.secretKeyHex.slice(2).match(/.{2}/g)!.map(b => parseInt(b, 16)))
-        const falconSig = signFalcon(secretKey, msgHash)
+        // Hit the Python backend to sign — same leafSeed gives the same pkCompact, so the
+        // commitment reconstructed here matches the one baked into the Merkle tree.
+        const res = await fetch('/api/falcon/sign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ seed: falconKey.leafSeedHex, message: userOpHash }),
+        })
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({ error: res.statusText }))
+          throw new Error(`Falcon sign API failed: ${errJson.error ?? res.statusText}`)
+        }
+        const { pkCompact, salt, s2Compact } = await res.json() as {
+          pkCompact: string[]
+          salt: `0x${string}`
+          s2Compact: string[]
+        }
 
-        const pubKeyHex = bytesToHex(publicKey)
-        const falconSigHex = bytesToHex(falconSig)
+        // Sanity: the pkCompact returned at sign time must match what was committed at keygen
+        if (pkCompact.join(',') !== falconKey.pkCompact.join(',')) {
+          throw new Error('Falcon pkCompact mismatch — backend derived a different key than keygen')
+        }
+
+        const pkBigInts = pkCompact.map(v => BigInt(v)) as readonly bigint[]
+        const s2BigInts = s2Compact.map(v => BigInt(v)) as readonly bigint[]
+
+        // commitment = abi.encode(uint256[] pkCompact) — matches what hca-keygen.ts wrote
+        const commitment = encodeAbiParameters(
+          parseAbiParameters('uint256[]'),
+          [pkBigInts],
+        )
+
+        // sigData = abi.encode(bytes salt, uint256[] s2, uint256[] ntth)
+        const sigData = encodeAbiParameters(
+          parseAbiParameters('bytes, uint256[], uint256[]'),
+          [salt, s2BigInts, pkBigInts],
+        )
+
         const merkleProofHex = bytes32ArrayToHex(
           wizard.leafHashes ? buildHCAMerkleProof(wizard.leafHashes, selectedLeafIndex) : []
         )
         proofLen = merkleProofHex.length
-
-        // commitment = abi.encode(bytes pubkeyPointer)
-        const commitment = encodeAbiParameters(parseAbiParameters('bytes'), [pubKeyHex])
-        // sigData = abi.encode(bytes pubkeyPointer, bytes falconSig)
-        const sigData = encodeAbiParameters(parseAbiParameters('bytes, bytes'), [pubKeyHex, falconSigHex])
 
         fullSig = encodeAbiParameters(
           parseAbiParameters('uint8, uint256, bytes32[], bytes, bytes'),

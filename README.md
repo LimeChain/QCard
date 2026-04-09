@@ -18,16 +18,21 @@ All crypto runs in the browser. No backend. The seed is encrypted with AES-256-G
 ## Quick Start
 
 ```bash
-git clone https://github.com/LimeChain/pqc-hca-poc.git
+git clone --recurse-submodules https://github.com/LimeChain/pqc-hca-poc.git
 cd pqc-hca-poc
 npm install
 
 cp .env.example .env.local
 # Fill in contract addresses (deploy your own or get from your team) and Pimlico API key
 
+# Set up the Falcon backend (Python venv for ZKNox ETHFALCON signer)
+./scripts/setup-falcon.sh
+
 npm run dev
 # Open http://localhost:3000
 ```
+
+> **Why Python?** Browser Falcon libraries (`js-fn-dsa`, `@noble/post-quantum`, `@tectonic-labs/bedrock-wasm`) don't produce byte-compatible output for ZKNox's on-chain ETHFALCON verifier. We shell out to ZKNox's reference Python signer via `/api/falcon/{keygen,sign}` to get signatures that verify on-chain. Lamport and ECDSA leaves stay fully browser-side.
 
 ## Environment Variables
 

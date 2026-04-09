@@ -1,15 +1,24 @@
 /**
  * Multi-scheme HCA key generation.
- * Generates a Merkle tree where each leaf can be a different scheme (Lamport, Falcon, ECDSA).
- * The leaf hash matches the contract: keccak256(abi.encodePacked(version, keccak256(commitment)))
+ *
+ * Each leaf in the Merkle tree commits to a different signature scheme:
+ *   - Lamport (0x01): commitment = 512 public key hashes, concatenated
+ *   - Falcon  (0x02): commitment = NTT-compacted public key (uint256[32])
+ *   - ECDSA   (0x03): commitment = signer address
+ *
+ * The leaf hash matches the contract formula:
+ *   leafHash = keccak256(abi.encodePacked(version, keccak256(commitment)))
+ *
+ * Falcon leaves use a Python backend (ZKNox ETHFALCON pythonref via /api/falcon/keygen)
+ * because js-fn-dsa and bedrock-wasm don't produce ETHFALCON-compatible byte layouts.
+ * The seed sent to the backend is derived from the master seed, so the whole tree is
+ * deterministic from a single master seed.
  */
 
 import { keccak256 } from './keccak'
 import { generateLeafKeypair, computeMerkleRoot, buildMerkleProof } from './lamport'
-import { generateFalconKeypair } from './falcon'
 import type { LeafConfig } from '@/lib/store'
 
-// Version bytes matching the contract
 const VERSION_LAMPORT = 0x01
 const VERSION_FALCON = 0x02
 const VERSION_ECDSA = 0x03
@@ -19,66 +28,81 @@ export interface HCALeafData {
   scheme: string
   version: number
   leafHash: Uint8Array
-  // Lamport-specific
   lamportPubKeyHashes?: Uint8Array[]
-  // Falcon-specific
-  falconPublicKey?: Uint8Array
-  falconSecretKey?: Uint8Array
-  // ECDSA-specific
+  /** Falcon NTT-compacted public key, 32 uint256 hex strings (from /api/falcon/keygen) */
+  falconPkCompact?: string[]
+  /** 32-byte seed sent to the Falcon backend — kept so signing derives the same keypair */
+  falconLeafSeedHex?: string
   ecdsaAddress?: string
 }
 
-/**
- * ABI-encode a single bytes32[512] array as Solidity would.
- * This is a simplified version — just concatenate all 32-byte values.
- * The actual abi.encode wraps in offset+length, but for keccak256(commitment)
- * we need the full ABI encoding.
- */
 function abiEncodeBytes32Array(arr: Uint8Array[]): Uint8Array {
-  // abi.encode(bytes32[512]) for a fixed-size array = just concatenate all elements
-  // (no offset/length prefix for fixed-size arrays in abi.encode)
   const result = new Uint8Array(arr.length * 32)
-  for (let i = 0; i < arr.length; i++) {
-    result.set(arr[i], i * 32)
-  }
+  for (let i = 0; i < arr.length; i++) result.set(arr[i], i * 32)
   return result
 }
 
 function abiEncodeAddress(addr: string): Uint8Array {
-  // abi.encode(address) = 32 bytes, left-padded
   const clean = addr.startsWith('0x') ? addr.slice(2) : addr
   const result = new Uint8Array(32)
   const bytes = new Uint8Array(20)
-  for (let i = 0; i < 20; i++) {
-    bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16)
-  }
-  result.set(bytes, 12) // left-padded to 32 bytes
+  for (let i = 0; i < 20; i++) bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16)
+  result.set(bytes, 12)
   return result
 }
 
-function abiEncodeBytes(data: Uint8Array): Uint8Array {
-  // abi.encode(bytes) = offset(32) + length(32) + data(padded to 32)
-  const paddedLen = Math.ceil(data.length / 32) * 32
-  const result = new Uint8Array(32 + 32 + paddedLen)
+/** abi.encode(uint256[32]) for a fixed-size 32-element array — just raw concatenation. */
+function abiEncodeUint256Array32(hexValues: string[]): Uint8Array {
+  if (hexValues.length !== 32) throw new Error(`expected 32 uint256 values, got ${hexValues.length}`)
+  const result = new Uint8Array(32 * 32)
+  for (let i = 0; i < 32; i++) {
+    const clean = hexValues[i].startsWith('0x') ? hexValues[i].slice(2) : hexValues[i]
+    const padded = clean.padStart(64, '0')
+    for (let j = 0; j < 32; j++) {
+      result[i * 32 + j] = parseInt(padded.slice(j * 2, j * 2 + 2), 16)
+    }
+  }
+  return result
+}
+
+/** abi.encode(uint256[]) for a dynamic array: offset(32) + length(32) + data. */
+function abiEncodeUint256ArrayDynamic(hexValues: string[]): Uint8Array {
+  const dataLen = hexValues.length * 32
+  const result = new Uint8Array(32 + 32 + dataLen)
   // offset = 32
   result[31] = 0x20
   // length
   const lenBytes = new Uint8Array(32)
-  let len = data.length
+  let len = hexValues.length
   for (let i = 31; i >= 0 && len > 0; i--) {
     lenBytes[i] = len & 0xff
     len = Math.floor(len / 256)
   }
   result.set(lenBytes, 32)
   // data
-  result.set(data, 64)
+  for (let i = 0; i < hexValues.length; i++) {
+    const clean = hexValues[i].startsWith('0x') ? hexValues[i].slice(2) : hexValues[i]
+    const padded = clean.padStart(64, '0')
+    for (let j = 0; j < 32; j++) {
+      result[64 + i * 32 + j] = parseInt(padded.slice(j * 2, j * 2 + 2), 16)
+    }
+  }
   return result
 }
 
-/**
- * Compute leaf hash: keccak256(abi.encodePacked(version, keccak256(commitment)))
- * abi.encodePacked(uint8, bytes32) = 1 byte + 32 bytes = 33 bytes
- */
+/** Match Solidity: keccak256(abi.encodePacked(masterSeed, leafIndex as uint256)) */
+function deriveFalconLeafSeed(masterSeed: Uint8Array, leafIndex: number): Uint8Array {
+  const buf = new Uint8Array(64)
+  buf.set(masterSeed, 0)
+  // uint256 big-endian
+  let remaining = leafIndex
+  for (let i = 63; i >= 32 && remaining > 0; i--) {
+    buf[i] = remaining & 0xff
+    remaining = Math.floor(remaining / 256)
+  }
+  return keccak256(buf)
+}
+
 function computeLeafHash(version: number, commitment: Uint8Array): Uint8Array {
   const commitmentHash = keccak256(commitment)
   const packed = new Uint8Array(33)
@@ -87,24 +111,48 @@ function computeLeafHash(version: number, commitment: Uint8Array): Uint8Array {
   return keccak256(packed)
 }
 
+function toHex(bytes: Uint8Array): string {
+  return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function falconKeygen(seedHex: string): Promise<string[]> {
+  const response = await fetch('/api/falcon/keygen', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seed: seedHex }),
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'unknown error' }))
+    throw new Error(`Falcon keygen failed: ${err.error ?? response.statusText}`)
+  }
+  const data = await response.json() as { pkCompact: string[] }
+  if (!Array.isArray(data.pkCompact) || data.pkCompact.length !== 32) {
+    throw new Error('invalid pkCompact response from backend')
+  }
+  return data.pkCompact
+}
+
+/** Build the Falcon leaf commitment bytes from the NTT-compacted pubkey. */
+export function buildFalconCommitment(pkCompact: string[]): Uint8Array {
+  return abiEncodeUint256ArrayDynamic(pkCompact)
+}
+
 /**
  * Generate all leaf data for an HCA account tree.
- * Returns leaf hashes for the Merkle tree and per-leaf key material.
+ * Async because Falcon leaves call the Python backend.
  */
-export function generateHCALeaves(
+export async function generateHCALeaves(
   masterSeed: Uint8Array,
   leaves: LeafConfig[],
   ecdsaAddress?: string,
-): HCALeafData[] {
+): Promise<HCALeafData[]> {
   const results: HCALeafData[] = []
 
   for (const leaf of leaves) {
     if (leaf.scheme === 'Lamport') {
-      const { publicKeyHashes, leafRoot } = generateLeafKeypair(masterSeed, leaf.index)
-      // commitment = abi.encode(bytes32[512]) = just the concatenated hashes (fixed-size array)
+      const { publicKeyHashes } = generateLeafKeypair(masterSeed, leaf.index)
       const commitment = abiEncodeBytes32Array(publicKeyHashes)
       const leafHash = computeLeafHash(VERSION_LAMPORT, commitment)
-
       results.push({
         index: leaf.index,
         scheme: 'Lamport',
@@ -112,11 +160,12 @@ export function generateHCALeaves(
         leafHash,
         lamportPubKeyHashes: publicKeyHashes,
       })
-
     } else if (leaf.scheme === 'Falcon') {
-      const { publicKey, secretKey } = generateFalconKeypair()
-      // commitment = abi.encode(bytes pubkey) — dynamic bytes
-      const commitment = abiEncodeBytes(publicKey)
+      const leafSeed = deriveFalconLeafSeed(masterSeed, leaf.index)
+      const seedHex = toHex(leafSeed)
+      const pkCompact = await falconKeygen(seedHex)
+
+      const commitment = buildFalconCommitment(pkCompact)
       const leafHash = computeLeafHash(VERSION_FALCON, commitment)
 
       results.push({
@@ -124,36 +173,19 @@ export function generateHCALeaves(
         scheme: 'Falcon',
         version: VERSION_FALCON,
         leafHash,
-        falconPublicKey: publicKey,
-        falconSecretKey: secretKey,
+        falconPkCompact: pkCompact,
+        falconLeafSeedHex: seedHex,
       })
-
     } else if (leaf.scheme === 'ECDSA') {
-      if (!ecdsaAddress) {
-        // Use a placeholder — will fail at signing time if wallet not connected
-        // This allows keygen to proceed without a wallet connection
-        const placeholderAddr = '0x0000000000000000000000000000000000000000'
-        const commitment = abiEncodeAddress(placeholderAddr)
-        const leafHash = computeLeafHash(VERSION_ECDSA, commitment)
-        results.push({
-          index: leaf.index,
-          scheme: 'ECDSA',
-          version: VERSION_ECDSA,
-          leafHash,
-          ecdsaAddress: placeholderAddr,
-        })
-        continue
-      }
-      // commitment = abi.encode(address) = 32 bytes left-padded
-      const commitment = abiEncodeAddress(ecdsaAddress)
+      const addr = ecdsaAddress ?? '0x0000000000000000000000000000000000000000'
+      const commitment = abiEncodeAddress(addr)
       const leafHash = computeLeafHash(VERSION_ECDSA, commitment)
-
       results.push({
         index: leaf.index,
         scheme: 'ECDSA',
         version: VERSION_ECDSA,
         leafHash,
-        ecdsaAddress,
+        ecdsaAddress: addr,
       })
     }
   }
@@ -161,9 +193,6 @@ export function generateHCALeaves(
   return results
 }
 
-/**
- * Build the account Merkle root from HCA leaf data.
- */
 export function buildHCAAccountRoot(leafData: HCALeafData[]): {
   leafHashes: Uint8Array[]
   accountRoot: Uint8Array
@@ -173,9 +202,6 @@ export function buildHCAAccountRoot(leafData: HCALeafData[]): {
   return { leafHashes, accountRoot }
 }
 
-/**
- * Build a Merkle proof for a specific leaf.
- */
 export function buildHCAMerkleProof(leafHashes: Uint8Array[], leafIndex: number): Uint8Array[] {
   return buildMerkleProof(leafHashes, leafIndex)
 }

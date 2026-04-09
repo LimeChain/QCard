@@ -22,8 +22,10 @@ export interface DeployedAddresses {
 
 export interface FalconLeafKey {
   leafIndex: number
-  publicKeyHex: string
-  secretKeyHex: string
+  /** 32-byte seed (hex) passed to the Python backend to derive the deterministic keypair */
+  leafSeedHex: string
+  /** NTT-compacted public key: 32 uint256 hex strings (Solidity-ready) */
+  pkCompact: string[]
 }
 
 export interface WizardState {

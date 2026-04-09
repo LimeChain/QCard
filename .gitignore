@@ -65,3 +65,7 @@ contracts/.gitmodules
 contracts/README.md
 contracts/broadcast/**
 contracts/foundry.lock
+
+# Falcon Python backend venv
+contracts/lib/ETHFALCON/pythonref/myenv/
+contracts/lib/ETHFALCON/pythonref/*.pyc

@@ -56,14 +56,11 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
       const masterSeed = generateMasterSeed()
 
       // Step 2: Generate multi-scheme leaf data
+      // Falcon leaves hit /api/falcon/keygen, so this is async and may take a few seconds per leaf
       setProgress(20)
 
       const ecdsaAddr = walletAddress ?? undefined
-      const leafData = await new Promise<ReturnType<typeof generateHCALeaves>>((resolve) => {
-        setTimeout(() => {
-          resolve(generateHCALeaves(masterSeed, wizard.leaves, ecdsaAddr))
-        }, 0)
-      })
+      const leafData = await generateHCALeaves(masterSeed, wizard.leaves, ecdsaAddr)
 
       setProgress(50)
 
@@ -82,13 +79,13 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
 
       const authRootHex = toHex(accountRoot)
 
-      // Extract Falcon keys for persistence
+      // Falcon leaves: store the derived seed + pkCompact so signing can rebuild the exact same key
       const falconKeys: FalconLeafKey[] = leafData
-        .filter(l => l.falconSecretKey)
+        .filter(l => l.scheme === 'Falcon' && l.falconPkCompact && l.falconLeafSeedHex)
         .map(l => ({
           leafIndex: l.index,
-          publicKeyHex: toHex(l.falconPublicKey!),
-          secretKeyHex: toHex(l.falconSecretKey!),
+          leafSeedHex: l.falconLeafSeedHex!,
+          pkCompact: l.falconPkCompact!,
         }))
 
       // Store everything in wizard context
