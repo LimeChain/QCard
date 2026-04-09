@@ -15,10 +15,12 @@ FALCON="${4:-0x0000000000000000000000000000000000000000}"
 PIMLICO_KEY=""
 PRIVATE_KEY_VAL=""
 RPC_URL=""
+FALCON_ENGINE_VAL=""
 if [ -f "$ENV_FILE" ]; then
-  PIMLICO_KEY=$(grep "NEXT_PUBLIC_PIMLICO_API_KEY=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- || true)
+  PIMLICO_KEY=$(grep "^NEXT_PUBLIC_PIMLICO_API_KEY=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- || true)
   PRIVATE_KEY_VAL=$(grep "^PRIVATE_KEY=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- || true)
-  RPC_URL=$(grep "^BASE_SEPOLIA_RPC_URL=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- || true)
+  RPC_URL=$(grep "^SEPOLIA_RPC_URL=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- || true)
+  FALCON_ENGINE_VAL=$(grep "^FALCON_ENGINE=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- || true)
 fi
 
 cat > "$ENV_FILE" << EOF
@@ -31,7 +33,8 @@ EOF
 
 # Preserve deploy vars if they existed
 [ -n "$PRIVATE_KEY_VAL" ] && echo "PRIVATE_KEY=$PRIVATE_KEY_VAL" >> "$ENV_FILE"
-[ -n "$RPC_URL" ] && echo "BASE_SEPOLIA_RPC_URL=$RPC_URL" >> "$ENV_FILE"
+[ -n "$RPC_URL" ] && echo "SEPOLIA_RPC_URL=$RPC_URL" >> "$ENV_FILE"
+[ -n "$FALCON_ENGINE_VAL" ] && echo "FALCON_ENGINE=$FALCON_ENGINE_VAL" >> "$ENV_FILE"
 
 echo "Wrote to $ENV_FILE:"
 echo "  Factory:  $FACTORY"
