@@ -116,10 +116,22 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
                  />
                </div>
                <Button size="lg" onClick={handleFund} disabled={isFunding || !accountAddress || !fundAmount}>
-                  {isFunding ? "Sending..." : `Send ${fundAmount} ETH`}
+                  {isFunding
+                    ? <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : null
+                  }
+                  {isFunding ? (isConfirming ? "Confirming..." : "Sending...") : `Send ${fundAmount} ETH`}
                </Button>
              </div>
-             {hasFunds && (
+             {isFunding && (
+               <div className="flex items-center gap-3 p-3 border border-border rounded-lg bg-[#161b22]">
+                 <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
+                 <p className="text-xs text-muted">
+                   {isSending ? 'Requesting wallet signature...' : isConfirming ? `Waiting for confirmation... ${txHash ? txHash.slice(0, 18) + '...' : ''}` : 'Processing...'}
+                 </p>
+               </div>
+             )}
+             {hasFunds && !isFunding && (
                <p className="text-xs text-green-400 text-center">Account is funded. You can send more or proceed to the next step.</p>
              )}
            </div>
