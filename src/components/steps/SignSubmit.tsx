@@ -99,19 +99,26 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
           })
         : BigInt(0)
 
-      // Build a preliminary UserOp with dummy signature to estimate gas
+      // Fetch current gas prices from the network
+      setSignStatus('Reading gas prices...')
+      const block = publicClient ? await publicClient.getBlock() : null
+      const baseFee = block?.baseFeePerGas ?? BigInt(1_000_000_000)
+      // maxFeePerGas = 2x baseFee + tip (keeps prefund reasonable)
+      const maxFee = baseFee * BigInt(2) + BigInt(1_500_000_000)
+      const maxPrio = BigInt(1_500_000_000) // 1.5 gwei tip
+
       const dummyUserOp: UserOperationV06 = {
         sender: accountAddr as `0x${string}`,
         nonce: viemToHex(BigInt(onChainNonce as bigint)),
         initCode: '0x',
         callData: callData as `0x${string}`,
         callGasLimit: viemToHex(BigInt(500_000)),
-        verificationGasLimit: viemToHex(BigInt(3_500_000)),
+        verificationGasLimit: viemToHex(BigInt(3_000_000)),
         preVerificationGas: viemToHex(BigInt(100_000)),
-        maxFeePerGas: viemToHex(BigInt(20_000_000_000)), // 20 gwei
-        maxPriorityFeePerGas: viemToHex(BigInt(2_000_000_000)), // 2 gwei
+        maxFeePerGas: viemToHex(maxFee),
+        maxPriorityFeePerGas: viemToHex(maxPrio),
         paymasterAndData: '0x',
-        signature: '0x' as `0x${string}`, // dummy — will be replaced
+        signature: '0x' as `0x${string}`,
       }
 
       // Compute the REAL userOpHash that the EntryPoint will pass to validateUserOp
