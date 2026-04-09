@@ -77,6 +77,25 @@ export async function estimateUserOpGas(
 }
 
 /**
+ * Ask Pimlico for the gas price tiers it will actually accept for a UserOperation.
+ * Using these values avoids "maxFeePerGas too low" rejections and aligns with
+ * what Pimlico itself uses internally during simulation.
+ */
+export async function getPimlicoGasPrice(
+  apiKey: string,
+  chainId: number,
+): Promise<{
+  maxFeePerGas: `0x${string}`
+  maxPriorityFeePerGas: `0x${string}`
+}> {
+  const url = bundlerUrl(apiKey, chainId)
+  const result = await rpc(url, 'pimlico_getUserOperationGasPrice', []) as {
+    standard: { maxFeePerGas: `0x${string}`; maxPriorityFeePerGas: `0x${string}` }
+  }
+  return result.standard
+}
+
+/**
  * Submit a UserOperation to Pimlico's bundler.
  * Returns the userOpHash.
  */

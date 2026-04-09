@@ -70,6 +70,16 @@ contract HCAAccount is IAccount {
         uint256 missingAccountFunds
     ) external override returns (uint256 validationData) {
         if (msg.sender != ENTRY_POINT) revert OnlyEntryPoint();
+
+        // ALWAYS pay the prefund first — matching the canonical SimpleAccount
+        // pattern. If we return early without paying, the EntryPoint surfaces
+        // a misleading "AA21 didn't pay prefund" error that masks the real
+        // signature failure.
+        if (missingAccountFunds > 0) {
+            (bool success,) = payable(ENTRY_POINT).call{value: missingAccountFunds}("");
+            (success); // don't revert on failure; EntryPoint will report AA21 if it matters
+        }
+
         if (userOp.sender != address(this) || userOp.nonce != nonce) {
             return SIG_VALIDATION_FAILED;
         }
@@ -100,12 +110,6 @@ contract HCAAccount is IAccount {
         }
 
         nonce++;
-
-        if (missingAccountFunds > 0) {
-            (bool success,) = payable(ENTRY_POINT).call{value: missingAccountFunds}("");
-            (success);
-        }
-
         return 0;
     }
 

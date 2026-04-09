@@ -14,7 +14,7 @@ import { signMessage as lamportSign, generateLeafKeypair, buildMerkleProof } fro
 import { buildHCAMerkleProof } from "@/lib/crypto/hca-keygen"
 import { keccak256 } from "@/lib/crypto"
 import { hcaAccountAbi } from "@/lib/contracts/abis"
-import { sendUserOperation, getUserOperationReceipt, estimateUserOpGas, type UserOperationV06 } from "@/lib/bundler/pimlico"
+import { sendUserOperation, getUserOperationReceipt, getPimlicoGasPrice, type UserOperationV06 } from "@/lib/bundler/pimlico"
 import { getUserOpHash } from "@/lib/bundler/userop"
 
 function bytesToHex(bytes: Uint8Array): `0x${string}` {
@@ -99,26 +99,47 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
           })
         : BigInt(0)
 
-      // Fetch current gas prices from the network
-      setSignStatus('Reading gas prices...')
-      const block = publicClient ? await publicClient.getBlock() : null
-      const baseFee = block?.baseFeePerGas ?? BigInt(1_000_000_000)
-      // Keep maxFeePerGas tight: baseFee * 1.5 + 1 gwei tip. Every gwei scales
-      // the bundler's simulated prefund linearly, so over-estimating the fee
-      // burns the account's balance cap during eth_estimateUserOperationGas.
-      const maxFee = (baseFee * BigInt(3)) / BigInt(2) + BigInt(1_000_000_000)
-      const maxPrio = BigInt(1_000_000_000) // 1 gwei tip
+      // Get Pimlico's recommended gas price — using their values avoids rejections
+      // for "maxFeePerGas too low" and matches what Pimlico uses in simulation.
+      // Skip the eth_estimateUserOperationGas step entirely — Pimlico inflates
+      // verificationGasLimit during estimation to a block-gas-limit ceiling,
+      // which makes the simulated prefund bigger than the real tx ever will.
+      // Our Foundry tests prove Lamport < 2.4M and Falcon < 2.1M verification gas,
+      // so 3M is a safe hardcoded ceiling.
+      setSignStatus('Reading Pimlico gas prices...')
+      let maxFee: bigint
+      let maxPrio: bigint
+      if (pimlicoKey) {
+        try {
+          const gp = await getPimlicoGasPrice(pimlicoKey, 11155111)
+          maxFee = BigInt(gp.maxFeePerGas)
+          maxPrio = BigInt(gp.maxPriorityFeePerGas)
+        } catch {
+          // Fallback to on-chain base fee if Pimlico is down
+          const block = publicClient ? await publicClient.getBlock() : null
+          const baseFee = block?.baseFeePerGas ?? BigInt(1_000_000_000)
+          maxFee = (baseFee * BigInt(3)) / BigInt(2) + BigInt(1_000_000_000)
+          maxPrio = BigInt(1_000_000_000)
+        }
+      } else {
+        const block = publicClient ? await publicClient.getBlock() : null
+        const baseFee = block?.baseFeePerGas ?? BigInt(1_000_000_000)
+        maxFee = (baseFee * BigInt(3)) / BigInt(2) + BigInt(1_000_000_000)
+        maxPrio = BigInt(1_000_000_000)
+      }
 
-      // Also check the account balance up-front so we fail fast with a clear error
-      // instead of getting AA21 from the bundler. The worst case prefund is
-      // Pimlico simulating at ~10M verificationGasLimit.
-      const worstCasePrefund = (BigInt(500_000) + BigInt(10_000_000) + BigInt(200_000)) * maxFee
+      // Pre-flight balance check: the EntryPoint's prefund = totalGas * maxFeePerGas.
+      // We use fixed gas limits, so the prefund is deterministic.
+      const CALL_GAS = BigInt(500_000)
+      const VERIFICATION_GAS = BigInt(3_000_000)
+      const PRE_VERIFICATION_GAS = BigInt(100_000)
+      const requiredPrefund = (CALL_GAS + VERIFICATION_GAS + PRE_VERIFICATION_GAS) * maxFee
       if (publicClient) {
         const accountBalance = await publicClient.getBalance({ address: accountAddr as `0x${string}` })
-        if (accountBalance < worstCasePrefund) {
-          const needEth = Number(worstCasePrefund) / 1e18
+        if (accountBalance < requiredPrefund) {
+          const needEth = Number(requiredPrefund) / 1e18
           const haveEth = Number(accountBalance) / 1e18
-          setError(`Account balance too low for bundler simulation. Have ${haveEth.toFixed(4)} ETH, need at least ${needEth.toFixed(4)} ETH at current gas prices (Sepolia baseFee = ${(Number(baseFee) / 1e9).toFixed(2)} gwei). Go back to Fund and add more ETH.`)
+          setError(`Account balance too low. Have ${haveEth.toFixed(4)} ETH, need at least ${needEth.toFixed(4)} ETH (maxFee = ${(Number(maxFee) / 1e9).toFixed(2)} gwei). Go back to Fund and add more ETH.`)
           setIsSigning(false)
           setSignStatus('')
           return
@@ -130,9 +151,9 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         nonce: viemToHex(BigInt(onChainNonce as bigint)),
         initCode: '0x',
         callData: callData as `0x${string}`,
-        callGasLimit: viemToHex(BigInt(500_000)),
-        verificationGasLimit: viemToHex(BigInt(3_000_000)),
-        preVerificationGas: viemToHex(BigInt(100_000)),
+        callGasLimit: viemToHex(CALL_GAS),
+        verificationGasLimit: viemToHex(VERIFICATION_GAS),
+        preVerificationGas: viemToHex(PRE_VERIFICATION_GAS),
         maxFeePerGas: viemToHex(maxFee),
         maxPriorityFeePerGas: viemToHex(maxPrio),
         paymasterAndData: '0x',
@@ -313,19 +334,10 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       if (useBundler) {
         wizard.setPimlicoApiKey(pimlicoKey)
 
-        setSubmitStatus('Estimating gas via bundler...')
-        try {
-          const gasEstimate = await estimateUserOpGas(builtUserOp, pimlicoKey, 11155111)
-          builtUserOp.callGasLimit = gasEstimate.callGasLimit
-          builtUserOp.verificationGasLimit = gasEstimate.verificationGasLimit
-          builtUserOp.preVerificationGas = gasEstimate.preVerificationGas
-        } catch (gasErr) {
-          const msg = gasErr instanceof Error ? gasErr.message : String(gasErr)
-          setError(`Gas estimation failed (validateUserOp likely reverts): ${msg}`)
-          setIsSubmitting(false)
-          return
-        }
-
+        // Skip eth_estimateUserOperationGas — Pimlico inflates verificationGasLimit
+        // during estimation which balloons the simulated prefund. Our Foundry tests
+        // prove the real validateUserOp fits in 3M gas for both Lamport and Falcon,
+        // so we ship the UserOp with the same fixed limits we computed at sign time.
         setSubmitStatus('Sending UserOperation to bundler...')
         const opHash = await sendUserOperation(builtUserOp, pimlicoKey, 11155111)
         setUserOpHashResult(opHash)
