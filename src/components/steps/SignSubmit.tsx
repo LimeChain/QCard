@@ -44,10 +44,12 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
   const [toAddress, setToAddress] = React.useState("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045")
   const [amount, setAmount] = React.useState("0.001")
   const [isSigning, setIsSigning] = React.useState(false)
+  const [signStatus, setSignStatus] = React.useState("")
   const [signatureHex, setSignatureHex] = React.useState("")
   const [sigMeta, setSigMeta] = React.useState<{ scheme: string; leafIndex: number; proofLen: number; sigBytes: number; userOpHash: string } | null>(null)
   const [builtUserOp, setBuiltUserOp] = React.useState<UserOperationV06 | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [submitStatus, setSubmitStatus] = React.useState("")
   const [submitted, setSubmitted] = React.useState(false)
   const [userOpHashResult, setUserOpHashResult] = React.useState("")
   const [showJson, setShowJson] = React.useState(false)
@@ -69,6 +71,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
     if (selectedLeafIndex === null || !wizard.masterSeed || !wizard.leafRoots) return
     setError(null)
     setIsSigning(true)
+    setSignStatus('Building UserOperation...')
 
     try {
       const leaf = leaves[selectedLeafIndex]
@@ -125,6 +128,8 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       let proofLen = 0
       let sigBytes = 0
 
+      setSignStatus(`Signing with ${leaf.scheme} (leaf ${selectedLeafIndex})...`)
+
       if (leaf.scheme === 'Lamport') {
         const result = await new Promise<ReturnType<typeof lamportSign>>((resolve) => {
           setTimeout(() => {
@@ -166,8 +171,8 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
           return
         }
 
-        // Hit the Python backend to sign — same leafSeed gives the same pkCompact, so the
-        // commitment reconstructed here matches the one baked into the Merkle tree.
+        // Hit the Python backend to sign
+        setSignStatus('Calling Falcon backend (Python)...')
         const res = await fetch('/api/falcon/sign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -258,6 +263,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       setError(err instanceof Error ? err.message : 'Signing failed')
     } finally {
       setIsSigning(false)
+      setSignStatus('')
     }
   }
 
@@ -265,11 +271,11 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
     if (!signatureHex || !accountAddr || !builtUserOp) return
     setError(null)
     setIsSubmitting(true)
+    setSubmitStatus('Checking account balance...')
 
     const useBundler = pimlicoKey.length > 0
 
     try {
-      // Check account has ETH to pay for gas
       if (publicClient) {
         const balance = await publicClient.getBalance({ address: accountAddr as `0x${string}` })
         if (balance === BigInt(0)) {
@@ -282,10 +288,9 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       if (useBundler) {
         wizard.setPimlicoApiKey(pimlicoKey)
 
-        // First try gas estimation to get a better error if validation fails
+        setSubmitStatus('Estimating gas via bundler...')
         try {
           const gasEstimate = await estimateUserOpGas(builtUserOp, pimlicoKey, 11155111)
-          // Use the bundler's gas estimates
           builtUserOp.callGasLimit = gasEstimate.callGasLimit
           builtUserOp.verificationGasLimit = gasEstimate.verificationGasLimit
           builtUserOp.preVerificationGas = gasEstimate.preVerificationGas
@@ -296,14 +301,17 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
           return
         }
 
+        setSubmitStatus('Sending UserOperation to bundler...')
         const opHash = await sendUserOperation(builtUserOp, pimlicoKey, 11155111)
         setUserOpHashResult(opHash)
 
+        setSubmitStatus('Waiting for on-chain confirmation...')
         const receipt = await getUserOperationReceipt(opHash, pimlicoKey, 11155111)
         if (receipt?.transactionHash) {
           wizard.setLastTxHash(receipt.transactionHash)
         }
       } else {
+        setSubmitStatus('Requesting wallet signature...')
         const walletClient = await getWalletClient(config, { chainId: 11155111 })
         if (!publicClient) {
           setError('Public client not ready.')
@@ -332,6 +340,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       setError(err instanceof Error ? err.message : 'Submission failed')
     } finally {
       setIsSubmitting(false)
+      setSubmitStatus('')
     }
   }
 
@@ -392,9 +401,19 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                onClick={handleSign}
                disabled={isSigning || !!signatureHex || selectedLeafIndex === null}
              >
-                <KeyRound className="w-4 h-4 mr-2" />
-                {isSigning ? "Signing locally..." : signatureHex ? "Signed Successfully" : "Sign with Selected Key"}
+                {isSigning
+                  ? <div className="w-4 h-4 mr-2 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                  : <KeyRound className="w-4 h-4 mr-2" />
+                }
+                {isSigning ? "Signing..." : signatureHex ? "Signed Successfully" : "Sign with Selected Key"}
              </Button>
+
+             {isSigning && signStatus && (
+               <div className="flex items-center gap-3 p-3 border border-border rounded-lg bg-[#161b22]">
+                 <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
+                 <p className="text-xs text-muted">{signStatus}</p>
+               </div>
+             )}
 
              {sigMeta && signatureHex && (
                <div className="p-4 bg-[#161b22] border border-border rounded-md space-y-2">
@@ -456,7 +475,10 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                onClick={handleSubmit}
                disabled={!signatureHex || isSubmitting || submitted}
              >
-                <Server className="w-4 h-4 mr-2" />
+                {isSubmitting
+                  ? <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <Server className="w-4 h-4 mr-2" />
+                }
                 {isSubmitting
                   ? "Submitting..."
                   : submitted
@@ -466,6 +488,13 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                       : "Direct Call (no PQC verification)"
                 }
              </Button>
+
+             {isSubmitting && submitStatus && (
+               <div className="flex items-center gap-3 p-3 border border-border rounded-lg bg-[#161b22]">
+                 <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
+                 <p className="text-xs text-muted">{submitStatus}</p>
+               </div>
+             )}
            </div>
 
            {submitted && (

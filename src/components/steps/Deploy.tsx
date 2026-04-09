@@ -20,6 +20,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
   const wizard = useWizard()
 
   const [isDeploying, setIsDeploying] = React.useState(false)
+  const [deployStatus, setDeployStatus] = React.useState("")
   const [deployError, setDeployError] = React.useState<string | null>(null)
 
   // Derive from persisted wizard state — survives refresh
@@ -53,7 +54,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
     setIsDeploying(true)
 
     try {
-      // Fetch wallet client on demand with explicit chain
+      setDeployStatus('Requesting wallet signature...')
       const walletClient = await getWalletClient(config, { chainId: 11155111 })
 
       const salt = BigInt(Date.now())
@@ -65,9 +66,14 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
         args: [wizard.authRoot as `0x${string}`, address, salt],
       })
 
-      await publicClient.waitForTransactionReceipt({ hash })
+      setDeployStatus(`Transaction sent. Waiting for confirmation...\n${hash.slice(0, 18)}...`)
+      await publicClient.waitForTransactionReceipt({
+        hash,
+        timeout: 120_000,
+        pollingInterval: 3_000,
+      })
 
-      // Read the predicted account address
+      setDeployStatus('Reading deployed account address...')
       const accountAddr = await publicClient.readContract({
         address: ADDRESSES.hcaFactory,
         abi: hcaFactoryAbi,
@@ -82,12 +88,16 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
         ecdsaVerifier: ADDRESSES.ecdsaVerifier,
         falconVerifier: ADDRESSES.falconVerifier,
       })
-
-      // isDeployed now derived from wizard.deployedAddresses
     } catch (err) {
-      setDeployError(err instanceof Error ? err.message : 'Deployment failed')
+      const msg = err instanceof Error ? err.message : 'Deployment failed'
+      if (msg.includes('could not be found')) {
+        setDeployError('Transaction submitted but receipt timed out. Sepolia may be congested. Check Etherscan and retry in a minute.')
+      } else {
+        setDeployError(msg)
+      }
     } finally {
       setIsDeploying(false)
+      setDeployStatus('')
     }
   }
 
@@ -173,6 +183,13 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
           >
             {isDeploying ? "Deploying..." : isDeployed ? "Deployed Successfully" : "Deploy Contracts"}
           </Button>
+
+          {isDeploying && deployStatus && (
+            <div className="flex items-center gap-3 p-3 border border-border rounded-lg bg-[#161b22]">
+              <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
+              <p className="text-xs text-muted">{deployStatus}</p>
+            </div>
+          )}
 
           {isDeployed && (
             <div className="space-y-3 animate-in fade-in pt-4 border-t border-border mt-4">
