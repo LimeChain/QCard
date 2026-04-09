@@ -103,9 +103,27 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       setSignStatus('Reading gas prices...')
       const block = publicClient ? await publicClient.getBlock() : null
       const baseFee = block?.baseFeePerGas ?? BigInt(1_000_000_000)
-      // maxFeePerGas = 2x baseFee + tip (keeps prefund reasonable)
-      const maxFee = baseFee * BigInt(2) + BigInt(1_500_000_000)
-      const maxPrio = BigInt(1_500_000_000) // 1.5 gwei tip
+      // Keep maxFeePerGas tight: baseFee * 1.5 + 1 gwei tip. Every gwei scales
+      // the bundler's simulated prefund linearly, so over-estimating the fee
+      // burns the account's balance cap during eth_estimateUserOperationGas.
+      const maxFee = (baseFee * BigInt(3)) / BigInt(2) + BigInt(1_000_000_000)
+      const maxPrio = BigInt(1_000_000_000) // 1 gwei tip
+
+      // Also check the account balance up-front so we fail fast with a clear error
+      // instead of getting AA21 from the bundler. The worst case prefund is
+      // Pimlico simulating at ~10M verificationGasLimit.
+      const worstCasePrefund = (BigInt(500_000) + BigInt(10_000_000) + BigInt(200_000)) * maxFee
+      if (publicClient) {
+        const accountBalance = await publicClient.getBalance({ address: accountAddr as `0x${string}` })
+        if (accountBalance < worstCasePrefund) {
+          const needEth = Number(worstCasePrefund) / 1e18
+          const haveEth = Number(accountBalance) / 1e18
+          setError(`Account balance too low for bundler simulation. Have ${haveEth.toFixed(4)} ETH, need at least ${needEth.toFixed(4)} ETH at current gas prices (Sepolia baseFee = ${(Number(baseFee) / 1e9).toFixed(2)} gwei). Go back to Fund and add more ETH.`)
+          setIsSigning(false)
+          setSignStatus('')
+          return
+        }
+      }
 
       const dummyUserOp: UserOperationV06 = {
         sender: accountAddr as `0x${string}`,

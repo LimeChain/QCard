@@ -11,7 +11,7 @@ import { parseEther, formatEther } from "viem"
 export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => void }) {
   const wizard = useWizard()
   const accountAddress = wizard.deployedAddresses?.hcaAccount ?? ''
-  const [fundAmount, setFundAmount] = React.useState("0.01")
+  const [fundAmount, setFundAmount] = React.useState("0.3")
 
   const {
     data: balanceData,
@@ -131,6 +131,9 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
                  </p>
                </div>
              )}
+             <p className="text-[11px] text-muted">
+               <strong>Minimum:</strong> 0.3 ETH. The bundler&apos;s gas estimation simulates at up to 10M verification gas, so the upfront prefund check can be ~0.1 ETH even though the real PQC verification only uses ~2M gas. Lower balances can trigger <code className="text-[10px] bg-[#161b22] px-1 rounded">AA21 didn&apos;t pay prefund</code>.
+             </p>
              {hasFunds && !isFunding && (
                <p className="text-xs text-green-400 text-center">Account is funded. You can send more or proceed to the next step.</p>
              )}
