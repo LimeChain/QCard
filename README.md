@@ -132,6 +132,37 @@ Each leaf in the Merkle tree has a version byte that selects the verification sc
 
 One account can have leaves of different schemes. Start with ECDSA for backward compatibility, add Lamport/Falcon leaves for quantum resistance, then stop using ECDSA leaves when ready.
 
+## Security & Production Readiness
+
+### What is real (no mocks)
+
+Every layer of the Falcon integration uses real cryptographic implementations:
+
+| Layer | Implementation |
+|-------|---------------|
+| `ZKNOX_ethfalcon.sol` | Full Falcon-512 on-chain verifier — real NTT transforms, polynomial arithmetic, and norm checking |
+| `FalconVerifier.sol` | Thin wrapper that calls the ZKNOX engine's `verify()` |
+| `falcon_service.py` | Wraps ZKNOX's Python reference implementation; real NTRU keygen and Keccak-based signing |
+| `/api/falcon/{keygen,sign}` | Spawns `falcon_service.py` — no stub code paths |
+| `SignSubmit.tsx` | Calls the API, validates `pkCompact` against stored keygen output, encodes for on-chain verification |
+| Sepolia deployment | Live contracts: engine `0xBa2f...BD59`, verifier `0xc866...b0c3` |
+| `check-falcon.sh` | Runs a known-good test vector against the live engine before and after each deploy |
+
+Lamport and ECDSA leaves are fully browser-side (no backend dependency).
+
+### Caveats before mainnet
+
+**1. ZKNOX marks this library as experimental**
+
+The `ZKNOX_ethfalcon` contract header and README both state:
+> *"This is an experimental work, not audited: DO NOT USE IN PRODUCTION, LOSS OF FUND WILL OCCUR."*
+
+The ETHFALCON variant replaces SHAKE with Keccak for gas efficiency. The security equivalence of this substitution has not been formally analysed. This implementation is suitable for Sepolia/testnet use and research. Mainnet deployments with real funds require a formal security review of the Keccak-PRNG variant.
+
+**2. Python backend is not load-hardened**
+
+Each `/api/falcon/sign` call spawns a fresh Python subprocess. There is no connection pooling, rate limiting, or timeout enforcement. Under sustained load this will exhaust server resources. Before any production deployment, replace the subprocess model with a persistent daemon (e.g. a long-running FastAPI service or a WASM port of the signer).
+
 ## License
 
 MIT
