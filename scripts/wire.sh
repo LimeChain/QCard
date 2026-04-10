@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Write deployed contract addresses to .env.local
-# Usage: ./scripts/wire.sh <factory> <lamport> <ecdsa> <falcon>
+# Usage: ./scripts/wire.sh <factory> <lamport> <ecdsa> <falcon> [falcon_engine]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="$(cd "$SCRIPT_DIR/.." && pwd)/.env.local"
 
-FACTORY="${1:?Usage: wire.sh <factory> <lamport> <ecdsa> <falcon>}"
-LAMPORT="${2:?Usage: wire.sh <factory> <lamport> <ecdsa> <falcon>}"
-ECDSA="${3:?Usage: wire.sh <factory> <lamport> <ecdsa> <falcon>}"
+FACTORY="${1:?Usage: wire.sh <factory> <lamport> <ecdsa> <falcon> [falcon_engine]}"
+LAMPORT="${2:?Usage: wire.sh <factory> <lamport> <ecdsa> <falcon> [falcon_engine]}"
+ECDSA="${3:?Usage: wire.sh <factory> <lamport> <ecdsa> <falcon> [falcon_engine]}"
 FALCON="${4:-0x0000000000000000000000000000000000000000}"
+FALCON_ENGINE_ARG="${5:-}"
 
 # Preserve existing non-address vars
 PIMLICO_KEY=""
@@ -21,6 +22,12 @@ if [ -f "$ENV_FILE" ]; then
   PRIVATE_KEY_VAL=$(grep "^PRIVATE_KEY=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- || true)
   RPC_URL=$(grep "^SEPOLIA_RPC_URL=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- || true)
   FALCON_ENGINE_VAL=$(grep "^FALCON_ENGINE=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2- || true)
+fi
+
+if [ -n "$FALCON_ENGINE_ARG" ]; then
+  FALCON_ENGINE_VAL="$FALCON_ENGINE_ARG"
+elif [ -n "${FALCON_ENGINE:-}" ]; then
+  FALCON_ENGINE_VAL="$FALCON_ENGINE"
 fi
 
 cat > "$ENV_FILE" << EOF
@@ -41,3 +48,4 @@ echo "  Factory:  $FACTORY"
 echo "  Lamport:  $LAMPORT"
 echo "  ECDSA:    $ECDSA"
 echo "  Falcon:   $FALCON"
+[ -n "$FALCON_ENGINE_VAL" ] && echo "  Engine:   $FALCON_ENGINE_VAL"
