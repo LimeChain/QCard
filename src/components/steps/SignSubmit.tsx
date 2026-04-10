@@ -67,6 +67,16 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
     setSelectedLeafIndex(firstAvailable)
   }, [leaves])
 
+  // Clear signature when user picks a different leaf
+  const handleLeafSelect = (index: number) => {
+    if (index === selectedLeafIndex) return
+    setSelectedLeafIndex(index)
+    setSignatureHex('')
+    setSigMeta(null)
+    setBuiltUserOp(null)
+    setError(null)
+  }
+
   const handleSign = async () => {
     if (selectedLeafIndex === null || !wizard.masterSeed || !wizard.leafRoots) return
     setError(null)
@@ -397,7 +407,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                   <button
                     key={leaf.index}
                     disabled={leaf.used}
-                    onClick={() => setSelectedLeafIndex(leaf.index)}
+                    onClick={() => handleLeafSelect(leaf.index)}
                     className={`
                       p-2 rounded-md border text-center transition-all flex flex-col items-center gap-1
                       ${leaf.used ? 'opacity-30 cursor-not-allowed border-border bg-card' : ''}
