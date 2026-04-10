@@ -13,8 +13,9 @@ import { encodeFunctionData, encodeAbiParameters, parseAbiParameters, parseEther
 import { signMessage as lamportSign, generateLeafKeypair, buildMerkleProof } from "@/lib/crypto"
 import { buildHCAMerkleProof } from "@/lib/crypto/hca-keygen"
 import { keccak256 } from "@/lib/crypto"
-import { hcaAccountAbi } from "@/lib/contracts/abis"
-import { sendUserOperation, getUserOperationReceipt, getPimlicoGasPrice, type UserOperationV06 } from "@/lib/bundler/pimlico"
+import { ADDRESSES } from "@/lib/contracts/addresses"
+import { hcaAccountAbi, entryPointAbi, lamportVerifierAbi, falconVerifierAbi } from "@/lib/contracts/abis"
+import { sendUserOperation, getUserOperationReceipt, getPimlicoGasPrice, estimateUserOpGas, type UserOperationV06 } from "@/lib/bundler/pimlico"
 import { getUserOpHash } from "@/lib/bundler/userop"
 
 function bytesToHex(bytes: Uint8Array): `0x${string}` {
@@ -28,11 +29,33 @@ function bytes32ArrayToHex(arr: Uint8Array[]): `0x${string}`[] {
 const VERSION_LAMPORT = 0x01
 const VERSION_FALCON = 0x02
 const VERSION_ECDSA = 0x03
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const ENTRY_POINT = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
 
 const SCHEME_VERSIONS: Record<string, number> = {
   Lamport: VERSION_LAMPORT,
   Falcon: VERSION_FALCON,
   ECDSA: VERSION_ECDSA,
+}
+
+const CALL_GAS = BigInt(500_000)
+const VERIFICATION_GAS = BigInt(3_000_000)
+const DEFAULT_PRE_VERIFICATION_GAS = BigInt(100_000)
+const PRE_VERIFICATION_GAS_MIN_HEADROOM = BigInt(10_000)
+const MAX_PRE_VERIFICATION_GAS_PASSES = 3
+
+function addPreVerificationGasHeadroom(required: bigint): bigint {
+  const percentHeadroom = required / BigInt(10)
+  const headroom = percentHeadroom > PRE_VERIFICATION_GAS_MIN_HEADROOM
+    ? percentHeadroom
+    : PRE_VERIFICATION_GAS_MIN_HEADROOM
+  return required + headroom
+}
+
+function parseRequiredPreVerificationGas(err: unknown): bigint | null {
+  const message = err instanceof Error ? err.message : String(err)
+  const match = message.match(/preVerificationGas is not enough,\s*required:\s*(\d+)/i)
+  return match ? BigInt(match[1]) : null
 }
 
 export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () => void }) {
@@ -61,6 +84,12 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
 
   const leaves = wizard.leaves
   const accountAddr = wizard.deployedAddresses?.hcaAccount ?? ''
+  const deploymentMatchesConfig = wizard.deployedAddresses
+    ? wizard.deployedAddresses.hcaFactory.toLowerCase() === ADDRESSES.hcaFactory.toLowerCase()
+      && wizard.deployedAddresses.lamportVerifier.toLowerCase() === ADDRESSES.lamportVerifier.toLowerCase()
+      && wizard.deployedAddresses.ecdsaVerifier.toLowerCase() === ADDRESSES.ecdsaVerifier.toLowerCase()
+      && wizard.deployedAddresses.falconVerifier.toLowerCase() === ADDRESSES.falconVerifier.toLowerCase()
+    : false
 
   React.useEffect(() => {
     const firstAvailable = leaves.find(l => !l.used)?.index ?? null
@@ -68,25 +97,39 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
   }, [leaves])
 
   // Clear signature when user picks a different leaf
-  const handleLeafSelect = (index: number) => {
-    if (index === selectedLeafIndex) return
-    setSelectedLeafIndex(index)
+  const clearSignedState = () => {
     setSignatureHex('')
     setSigMeta(null)
     setBuiltUserOp(null)
+    setSubmitted(false)
+    setUserOpHashResult('')
+  }
+
+  const handleLeafSelect = (index: number) => {
+    if (index === selectedLeafIndex) return
+    setSelectedLeafIndex(index)
+    clearSignedState()
     setError(null)
   }
 
   const handleSign = async () => {
     if (selectedLeafIndex === null || !wizard.masterSeed || !wizard.leafRoots) return
+    const leafIndex = selectedLeafIndex
     setError(null)
     setIsSigning(true)
     setSignStatus('Building UserOperation...')
 
     try {
-      const leaf = leaves[selectedLeafIndex]
+      if (!accountAddr) {
+        throw new Error('No deployed account found. Go back to Deploy and create an account first.')
+      }
+      if (!deploymentMatchesConfig) {
+        throw new Error('Configured contract addresses changed since this account was deployed. Go back to Deploy and create a fresh HCA account against the current verifier stack.')
+      }
+
+      const leaf = leaves.find((l) => l.index === leafIndex)
       if (!leaf) {
-        setError(`Leaf ${selectedLeafIndex} not found.`)
+        setError(`Leaf ${leafIndex} not found.`)
         setIsSigning(false)
         return
       }
@@ -101,21 +144,44 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       })
 
       // Read on-chain nonce
-      const onChainNonce = publicClient
-        ? await publicClient.readContract({
-            address: accountAddr as `0x${string}`,
-            abi: hcaAccountAbi,
-            functionName: 'nonce',
-          })
-        : BigInt(0)
+      if (!publicClient) {
+        throw new Error('Public client not initialised — cannot read on-chain nonce. Refresh the page and reconnect.')
+      }
+      const [onChainNonce, onChainAuthRoot, registeredVerifier] = await Promise.all([
+        publicClient.readContract({
+          address: accountAddr as `0x${string}`,
+          abi: hcaAccountAbi,
+          functionName: 'nonce',
+        }),
+        publicClient.readContract({
+          address: accountAddr as `0x${string}`,
+          abi: hcaAccountAbi,
+          functionName: 'authRoot',
+        }),
+        publicClient.readContract({
+          address: accountAddr as `0x${string}`,
+          abi: hcaAccountAbi,
+          functionName: 'verifiers',
+          args: [version],
+        }),
+      ])
+
+      if (wizard.authRoot && String(onChainAuthRoot).toLowerCase() !== wizard.authRoot.toLowerCase()) {
+        throw new Error(
+          `Local auth root (${wizard.authRoot.slice(0, 10)}...) doesn't match deployed account root (${String(onChainAuthRoot).slice(0, 10)}...). Regenerate keys and deploy a fresh account, or reset wizard state.`,
+        )
+      }
+      if (String(registeredVerifier).toLowerCase() === ZERO_ADDRESS) {
+        throw new Error(
+          `Selected ${leaf.scheme} leaf cannot be verified on this account (verifier not registered). Redeploy the account with all verifiers, or choose another leaf scheme.`,
+        )
+      }
 
       // Get Pimlico's recommended gas price — using their values avoids rejections
       // for "maxFeePerGas too low" and matches what Pimlico uses in simulation.
-      // Skip the eth_estimateUserOperationGas step entirely — Pimlico inflates
-      // verificationGasLimit during estimation to a block-gas-limit ceiling,
-      // which makes the simulated prefund bigger than the real tx ever will.
-      // Our Foundry tests prove Lamport < 2.4M and Falcon < 2.1M verification gas,
-      // so 3M is a safe hardcoded ceiling.
+      // We still keep our own verificationGasLimit ceiling because Pimlico inflates
+      // that value during estimation, but we calibrate preVerificationGas later
+      // because it depends on the final signed payload size.
       setSignStatus('Reading Pimlico gas prices...')
       let maxFee: bigint
       let maxPrio: bigint
@@ -138,12 +204,248 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         maxPrio = BigInt(1_000_000_000)
       }
 
-      // Pre-flight balance check: the EntryPoint's prefund = totalGas * maxFeePerGas.
-      // We use fixed gas limits, so the prefund is deterministic.
-      const CALL_GAS = BigInt(500_000)
-      const VERIFICATION_GAS = BigInt(3_000_000)
-      const PRE_VERIFICATION_GAS = BigInt(100_000)
-      const requiredPrefund = (CALL_GAS + VERIFICATION_GAS + PRE_VERIFICATION_GAS) * maxFee
+      const buildSignedUserOp = async (preVerificationGas: bigint) => {
+        const unsignedUserOp: UserOperationV06 = {
+          sender: accountAddr as `0x${string}`,
+          nonce: viemToHex(BigInt(onChainNonce as bigint)),
+          initCode: '0x',
+          callData: callData as `0x${string}`,
+          callGasLimit: viemToHex(CALL_GAS),
+          verificationGasLimit: viemToHex(VERIFICATION_GAS),
+          preVerificationGas: viemToHex(preVerificationGas),
+          maxFeePerGas: viemToHex(maxFee),
+          maxPriorityFeePerGas: viemToHex(maxPrio),
+          paymasterAndData: '0x',
+          signature: '0x' as `0x${string}`,
+        }
+
+        const userOpHash = getUserOpHash(unsignedUserOp, 11155111)
+
+        const msgHash = new Uint8Array(32)
+        const hashClean = userOpHash.slice(2)
+        for (let i = 0; i < 32; i++) {
+          msgHash[i] = parseInt(hashClean.slice(i * 2, i * 2 + 2), 16)
+        }
+
+        let fullSig: `0x${string}`
+        let proofLen = 0
+        let sigBytes = 0
+
+        setSignStatus(`Signing with ${leaf.scheme} (leaf ${leafIndex})...`)
+
+        if (leaf.scheme === 'Lamport') {
+          const result = await new Promise<ReturnType<typeof lamportSign>>((resolve) => {
+            setTimeout(() => {
+              resolve(lamportSign(wizard.masterSeed!, leafIndex, wizard.leafRoots!.length, msgHash))
+            }, 0)
+          })
+
+          const pubKeyHashesHex = bytes32ArrayToHex(result.publicKeyHashes)
+          const lamportSigHex = bytes32ArrayToHex(result.signature)
+          if (!wizard.leafHashes) {
+            throw new Error('Leaf hashes missing from wizard state — please regenerate keys.')
+          }
+          const merkleProofHex = bytes32ArrayToHex(buildHCAMerkleProof(wizard.leafHashes, leafIndex))
+          proofLen = merkleProofHex.length
+
+          const commitment = encodeAbiParameters(
+            parseAbiParameters('bytes32[512]'),
+            [pubKeyHashesHex as readonly `0x${string}`[]],
+          )
+
+          const sigData = encodeAbiParameters(
+            parseAbiParameters('bytes32[512], bytes32[256]'),
+            [pubKeyHashesHex as readonly `0x${string}`[], lamportSigHex as readonly `0x${string}`[]],
+          )
+
+          fullSig = encodeAbiParameters(
+            parseAbiParameters('uint8, uint256, bytes32[], bytes, bytes'),
+            [version, BigInt(leafIndex), merkleProofHex as readonly `0x${string}`[], commitment, sigData],
+          ) as `0x${string}`
+
+          sigBytes = (fullSig.length - 2) / 2
+
+          if (wizard.deployedAddresses?.lamportVerifier) {
+            try {
+              const lamportValid = await publicClient.readContract({
+                address: wizard.deployedAddresses.lamportVerifier as `0x${string}`,
+                abi: lamportVerifierAbi,
+                functionName: 'verify',
+                args: [userOpHash as `0x${string}`, sigData],
+              })
+              console.log('[PQC] LamportVerifier.verify result:', lamportValid)
+              if (!lamportValid) {
+                throw new Error(
+                  `Lamport signature invalid — the LamportVerifier.verify() call returned false.\n` +
+                  `This means the private keys used for signing don't match the committed public key hashes,\n` +
+                  `OR the userOpHash signed doesn't match the on-chain hash.\n` +
+                  `Check browser console for the full hash comparison above.`
+                )
+              }
+              console.log('[PQC] ✓ Lamport signature verified by on-chain LamportVerifier')
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
+              if (msg.startsWith('Lamport signature invalid')) throw err
+              console.warn('[PQC] Could not call LamportVerifier.verify on-chain (non-fatal):', err)
+            }
+          }
+        } else if (leaf.scheme === 'Falcon') {
+          const falconKey = wizard.falconKeys.find(k => k.leafIndex === leafIndex)
+          if (!falconKey) {
+            throw new Error(`No Falcon record for leaf ${leafIndex}. Regenerate keys.`)
+          }
+
+          setSignStatus('Calling Falcon backend (Python)...')
+          const res = await fetch('/api/falcon/sign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seed: falconKey.leafSeedHex, message: userOpHash }),
+          })
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({ error: res.statusText }))
+            throw new Error(`Falcon sign API failed: ${errJson.error ?? res.statusText}`)
+          }
+          const { pkCompact, salt, s2Compact } = await res.json() as {
+            pkCompact: string[]
+            salt: `0x${string}`
+            s2Compact: string[]
+          }
+
+          if (pkCompact.join(',') !== falconKey.pkCompact.join(',')) {
+            throw new Error('Falcon pkCompact mismatch — backend derived a different key than keygen')
+          }
+
+          const pkBigInts = pkCompact.map(v => BigInt(v)) as readonly bigint[]
+          const s2BigInts = s2Compact.map(v => BigInt(v)) as readonly bigint[]
+
+          const commitment = encodeAbiParameters(
+            parseAbiParameters('uint256[]'),
+            [pkBigInts],
+          )
+
+          const sigData = encodeAbiParameters(
+            parseAbiParameters('bytes, uint256[], uint256[]'),
+            [salt, s2BigInts, pkBigInts],
+          )
+
+          if (!wizard.leafHashes) {
+            throw new Error('Leaf hashes missing from wizard state — please regenerate keys.')
+          }
+          const merkleProofHex = bytes32ArrayToHex(buildHCAMerkleProof(wizard.leafHashes, leafIndex))
+          proofLen = merkleProofHex.length
+
+          fullSig = encodeAbiParameters(
+            parseAbiParameters('uint8, uint256, bytes32[], bytes, bytes'),
+            [version, BigInt(leafIndex), merkleProofHex as readonly `0x${string}`[], commitment, sigData],
+          ) as `0x${string}`
+
+          sigBytes = (fullSig.length - 2) / 2
+
+          if (wizard.deployedAddresses?.falconVerifier && wizard.deployedAddresses.falconVerifier !== ZERO_ADDRESS) {
+            try {
+              const falconValid = await publicClient.readContract({
+                address: wizard.deployedAddresses.falconVerifier as `0x${string}`,
+                abi: falconVerifierAbi,
+                functionName: 'verify',
+                args: [userOpHash as `0x${string}`, sigData],
+              })
+              console.log('[PQC] FalconVerifier.verify result:', falconValid)
+              if (!falconValid) {
+                throw new Error(
+                  `Falcon signature invalid — the deployed FalconVerifier rejected it before bundler submission.\n` +
+                  `This points to a Falcon verifier/engine deployment mismatch on Sepolia, not a bundler hashing bug.\n` +
+                  `Use a Lamport/ECDSA leaf for now, or redeploy Falcon against a verified ETHFALCON engine.`
+                )
+              }
+              console.log('[PQC] ✓ Falcon signature verified by on-chain FalconVerifier')
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
+              if (msg.startsWith('Falcon signature invalid')) throw err
+              console.warn('[PQC] Could not call FalconVerifier.verify on-chain (non-fatal):', err)
+            }
+          }
+        } else if (leaf.scheme === 'ECDSA') {
+          if (!walletAddress) {
+            throw new Error('Connect a wallet to sign with ECDSA leaves.')
+          }
+
+          const walletClient = await getWalletClient(config, { chainId: 11155111 })
+          const ecdsaSig = await walletClient.request({
+            method: 'eth_sign',
+            params: [walletAddress, bytesToHex(msgHash)],
+          }) as `0x${string}`
+
+          if (!wizard.leafHashes) {
+            throw new Error('Leaf hashes missing from wizard state — please regenerate keys.')
+          }
+          const merkleProofHex = bytes32ArrayToHex(buildHCAMerkleProof(wizard.leafHashes, leafIndex))
+          proofLen = merkleProofHex.length
+
+          const commitment = encodeAbiParameters(parseAbiParameters('address'), [walletAddress])
+          const sigData = encodeAbiParameters(parseAbiParameters('address, bytes'), [walletAddress, ecdsaSig as `0x${string}`])
+
+          fullSig = encodeAbiParameters(
+            parseAbiParameters('uint8, uint256, bytes32[], bytes, bytes'),
+            [version, BigInt(leafIndex), merkleProofHex as readonly `0x${string}`[], commitment, sigData],
+          ) as `0x${string}`
+
+          sigBytes = (fullSig.length - 2) / 2
+        } else {
+          throw new Error(`Unknown scheme: ${leaf.scheme}`)
+        }
+
+        return {
+          unsignedUserOp,
+          finalUserOp: { ...unsignedUserOp, signature: fullSig },
+          userOpHash,
+          fullSig,
+          proofLen,
+          sigBytes,
+        }
+      }
+
+      let preVerificationGas = DEFAULT_PRE_VERIFICATION_GAS
+      let signedUserOp = await buildSignedUserOp(preVerificationGas)
+
+      if (pimlicoKey) {
+        for (let attempt = 0; attempt < MAX_PRE_VERIFICATION_GAS_PASSES; attempt++) {
+          setSignStatus(`Calibrating preVerificationGas (${attempt + 1}/${MAX_PRE_VERIFICATION_GAS_PASSES})...`)
+
+          let requiredPreVerificationGas: bigint
+          try {
+            const gasEstimate = await estimateUserOpGas(signedUserOp.finalUserOp, pimlicoKey, 11155111)
+            requiredPreVerificationGas = BigInt(gasEstimate.preVerificationGas)
+          } catch (err) {
+            const parsedRequired = parseRequiredPreVerificationGas(err)
+            if (parsedRequired === null) throw err
+            requiredPreVerificationGas = parsedRequired
+          }
+
+          const bufferedPreVerificationGas = addPreVerificationGasHeadroom(requiredPreVerificationGas)
+          console.log(
+            '[PQC] preVerificationGas current/required/buffered:',
+            preVerificationGas.toString(),
+            requiredPreVerificationGas.toString(),
+            bufferedPreVerificationGas.toString(),
+          )
+
+          if (bufferedPreVerificationGas <= preVerificationGas) {
+            break
+          }
+          if (attempt === MAX_PRE_VERIFICATION_GAS_PASSES - 1) {
+            throw new Error(
+              `Bundler still needs more preVerificationGas after ${MAX_PRE_VERIFICATION_GAS_PASSES} signing passes ` +
+              `(latest required ${requiredPreVerificationGas.toString()}). Please sign again.`,
+            )
+          }
+
+          preVerificationGas = bufferedPreVerificationGas
+          signedUserOp = await buildSignedUserOp(preVerificationGas)
+        }
+      }
+
+      const requiredPrefund =
+        (CALL_GAS + VERIFICATION_GAS + BigInt(signedUserOp.finalUserOp.preVerificationGas)) * maxFee
       if (publicClient) {
         const accountBalance = await publicClient.getBalance({ address: accountAddr as `0x${string}` })
         if (accountBalance < requiredPrefund) {
@@ -156,165 +458,59 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         }
       }
 
-      const dummyUserOp: UserOperationV06 = {
-        sender: accountAddr as `0x${string}`,
-        nonce: viemToHex(BigInt(onChainNonce as bigint)),
-        initCode: '0x',
-        callData: callData as `0x${string}`,
-        callGasLimit: viemToHex(CALL_GAS),
-        verificationGasLimit: viemToHex(VERIFICATION_GAS),
-        preVerificationGas: viemToHex(PRE_VERIFICATION_GAS),
-        maxFeePerGas: viemToHex(maxFee),
-        maxPriorityFeePerGas: viemToHex(maxPrio),
-        paymasterAndData: '0x',
-        signature: '0x' as `0x${string}`,
-      }
-
-      // Compute the REAL userOpHash that the EntryPoint will pass to validateUserOp
-      const userOpHash = getUserOpHash(dummyUserOp, 11155111)
-
-      // Convert hex hash to Uint8Array for the crypto libs
-      const msgHash = new Uint8Array(32)
-      const hashClean = userOpHash.slice(2)
-      for (let i = 0; i < 32; i++) {
-        msgHash[i] = parseInt(hashClean.slice(i * 2, i * 2 + 2), 16)
-      }
-
-      let fullSig: `0x${string}`
-      let proofLen = 0
-      let sigBytes = 0
-
-      setSignStatus(`Signing with ${leaf.scheme} (leaf ${selectedLeafIndex})...`)
-
-      if (leaf.scheme === 'Lamport') {
-        const result = await new Promise<ReturnType<typeof lamportSign>>((resolve) => {
-          setTimeout(() => {
-            resolve(lamportSign(wizard.masterSeed!, selectedLeafIndex, wizard.leafRoots!.length, msgHash))
-          }, 0)
-        })
-
-        const pubKeyHashesHex = bytes32ArrayToHex(result.publicKeyHashes)
-        const lamportSigHex = bytes32ArrayToHex(result.signature)
-        // Use HCA leaf hashes for the Merkle proof (matches authRoot with version-prefixed leaves)
-        const merkleProofHex = bytes32ArrayToHex(
-          wizard.leafHashes ? buildHCAMerkleProof(wizard.leafHashes, selectedLeafIndex) : result.merkleProof
-        )
-        proofLen = merkleProofHex.length
-
-        const commitment = encodeAbiParameters(
-          parseAbiParameters('bytes32[512]'),
-          [pubKeyHashesHex as readonly `0x${string}`[]],
-        )
-
-        const sigData = encodeAbiParameters(
-          parseAbiParameters('bytes32[512], bytes32[256]'),
-          [pubKeyHashesHex as readonly `0x${string}`[], lamportSigHex as readonly `0x${string}`[]],
-        )
-
-        fullSig = encodeAbiParameters(
-          parseAbiParameters('uint8, uint256, bytes32[], bytes, bytes'),
-          [version, BigInt(selectedLeafIndex), merkleProofHex as readonly `0x${string}`[], commitment, sigData],
-        ) as `0x${string}`
-
-        sigBytes = (fullSig.length - 2) / 2
-
-      } else if (leaf.scheme === 'Falcon') {
-        // Find the stored Falcon leaf record (leafSeed + pkCompact derived at keygen time)
-        const falconKey = wizard.falconKeys.find(k => k.leafIndex === selectedLeafIndex)
-        if (!falconKey) {
-          setError(`No Falcon record for leaf ${selectedLeafIndex}. Regenerate keys.`)
-          setIsSigning(false)
-          return
+      // --- PRE-FLIGHT VERIFICATION ---
+      // Verify the locally computed userOpHash matches what the real EntryPoint produces.
+      // A mismatch here means the TypeScript formula diverges from the on-chain formula,
+      // which would cause every Lamport/Falcon signature to be wrong.
+      setSignStatus('Pre-flight: verifying userOpHash against EntryPoint...')
+      try {
+        const userOpStruct = {
+          sender: signedUserOp.unsignedUserOp.sender,
+          nonce: BigInt(signedUserOp.unsignedUserOp.nonce),
+          initCode: signedUserOp.unsignedUserOp.initCode,
+          callData: signedUserOp.unsignedUserOp.callData,
+          callGasLimit: BigInt(signedUserOp.unsignedUserOp.callGasLimit),
+          verificationGasLimit: BigInt(signedUserOp.unsignedUserOp.verificationGasLimit),
+          preVerificationGas: BigInt(signedUserOp.unsignedUserOp.preVerificationGas),
+          maxFeePerGas: BigInt(signedUserOp.unsignedUserOp.maxFeePerGas),
+          maxPriorityFeePerGas: BigInt(signedUserOp.unsignedUserOp.maxPriorityFeePerGas),
+          paymasterAndData: signedUserOp.unsignedUserOp.paymasterAndData,
+          signature: '0x' as `0x${string}`,
         }
-
-        // Hit the Python backend to sign
-        setSignStatus('Calling Falcon backend (Python)...')
-        const res = await fetch('/api/falcon/sign', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ seed: falconKey.leafSeedHex, message: userOpHash }),
-        })
-        if (!res.ok) {
-          const errJson = await res.json().catch(() => ({ error: res.statusText }))
-          throw new Error(`Falcon sign API failed: ${errJson.error ?? res.statusText}`)
+        const onChainHash = await publicClient.readContract({
+          address: ENTRY_POINT,
+          abi: entryPointAbi,
+          functionName: 'getUserOpHash',
+          args: [userOpStruct],
+        }) as `0x${string}`
+        console.log('[PQC] Local userOpHash:', signedUserOp.userOpHash)
+        console.log('[PQC] On-chain userOpHash:', onChainHash)
+        if (onChainHash.toLowerCase() !== signedUserOp.userOpHash.toLowerCase()) {
+          throw new Error(
+            `UserOpHash mismatch — TypeScript formula diverges from the on-chain EntryPoint.\n` +
+            `Local:    ${signedUserOp.userOpHash}\n` +
+            `On-chain: ${onChainHash}\n\n` +
+            `The Lamport signature was computed over the wrong hash. This is a bug in getUserOpHash(). File a bug report.`
+          )
         }
-        const { pkCompact, salt, s2Compact } = await res.json() as {
-          pkCompact: string[]
-          salt: `0x${string}`
-          s2Compact: string[]
-        }
-
-        // Sanity: the pkCompact returned at sign time must match what was committed at keygen
-        if (pkCompact.join(',') !== falconKey.pkCompact.join(',')) {
-          throw new Error('Falcon pkCompact mismatch — backend derived a different key than keygen')
-        }
-
-        const pkBigInts = pkCompact.map(v => BigInt(v)) as readonly bigint[]
-        const s2BigInts = s2Compact.map(v => BigInt(v)) as readonly bigint[]
-
-        // commitment = abi.encode(uint256[] pkCompact) — matches what hca-keygen.ts wrote
-        const commitment = encodeAbiParameters(
-          parseAbiParameters('uint256[]'),
-          [pkBigInts],
-        )
-
-        // sigData = abi.encode(bytes salt, uint256[] s2, uint256[] ntth)
-        const sigData = encodeAbiParameters(
-          parseAbiParameters('bytes, uint256[], uint256[]'),
-          [salt, s2BigInts, pkBigInts],
-        )
-
-        const merkleProofHex = bytes32ArrayToHex(
-          wizard.leafHashes ? buildHCAMerkleProof(wizard.leafHashes, selectedLeafIndex) : []
-        )
-        proofLen = merkleProofHex.length
-
-        fullSig = encodeAbiParameters(
-          parseAbiParameters('uint8, uint256, bytes32[], bytes, bytes'),
-          [version, BigInt(selectedLeafIndex), merkleProofHex as readonly `0x${string}`[], commitment, sigData],
-        ) as `0x${string}`
-
-        sigBytes = (fullSig.length - 2) / 2
-
-      } else if (leaf.scheme === 'ECDSA') {
-        // Use the connected wallet's native ECDSA signing
-        if (!walletAddress) {
-          setError('Connect a wallet to sign with ECDSA leaves.')
-          setIsSigning(false)
-          return
-        }
-
-        const walletClient = await getWalletClient(config, { chainId: 11155111 })
-        const ecdsaSig = await walletClient.signMessage({ message: { raw: msgHash } })
-
-        const merkleProofHex = bytes32ArrayToHex(
-          wizard.leafHashes ? buildHCAMerkleProof(wizard.leafHashes, selectedLeafIndex) : []
-        )
-        proofLen = merkleProofHex.length
-
-        // commitment = abi.encode(address signer)
-        const commitment = encodeAbiParameters(parseAbiParameters('address'), [walletAddress])
-        // sigData = abi.encode(address signer, bytes ecdsaSig)
-        const sigData = encodeAbiParameters(parseAbiParameters('address, bytes'), [walletAddress, ecdsaSig as `0x${string}`])
-
-        fullSig = encodeAbiParameters(
-          parseAbiParameters('uint8, uint256, bytes32[], bytes, bytes'),
-          [version, BigInt(selectedLeafIndex), merkleProofHex as readonly `0x${string}`[], commitment, sigData],
-        ) as `0x${string}`
-
-        sigBytes = (fullSig.length - 2) / 2
-
-      } else {
-        setError(`Unknown scheme: ${leaf.scheme}`)
-        setIsSigning(false)
-        return
+        console.log('[PQC] ✓ userOpHash matches on-chain EntryPoint')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('UserOpHash mismatch')) throw err
+        // Network or ABI issues — log and continue; don't block signing
+        console.warn('[PQC] Could not verify userOpHash on-chain (non-fatal):', err)
       }
 
       // Store the complete UserOp with the real signature
-      const finalUserOp: UserOperationV06 = { ...dummyUserOp, signature: fullSig }
-      setBuiltUserOp(finalUserOp)
-      setSignatureHex(fullSig)
-      setSigMeta({ scheme: leaf.scheme, leafIndex: selectedLeafIndex, proofLen, sigBytes, userOpHash })
+      setBuiltUserOp(signedUserOp.finalUserOp)
+      setSignatureHex(signedUserOp.fullSig)
+      setSigMeta({
+        scheme: leaf.scheme,
+        leafIndex: leafIndex,
+        proofLen: signedUserOp.proofLen,
+        sigBytes: signedUserOp.sigBytes,
+        userOpHash: signedUserOp.userOpHash,
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signing failed')
     } finally {
@@ -332,6 +528,13 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
     const useBundler = pimlicoKey.length > 0
 
     try {
+      if (sigMeta) {
+        const recomputedHash = getUserOpHash(builtUserOp, 11155111)
+        if (recomputedHash.toLowerCase() !== sigMeta.userOpHash.toLowerCase()) {
+          throw new Error('Signed hash mismatch: UserOperation changed after signing. Please sign again before submitting.')
+        }
+      }
+
       if (publicClient) {
         const balance = await publicClient.getBalance({ address: accountAddr as `0x${string}` })
         if (balance === BigInt(0)) {
@@ -424,7 +627,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                 ))}
              </div>
              <p className="text-xs text-muted">
-                Selected: <span className="text-foreground">{selectedLeafIndex !== null ? `Leaf ${selectedLeafIndex} (${leaves[selectedLeafIndex]?.scheme ?? '?'})` : "None"}</span>
+                Selected: <span className="text-foreground">{selectedLeafIndex !== null ? `Leaf ${selectedLeafIndex} (${leaves.find(l => l.index === selectedLeafIndex)?.scheme ?? '?'})` : "None"}</span>
              </p>
            </div>
 

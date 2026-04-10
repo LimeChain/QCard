@@ -23,8 +23,16 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
   const [deployStatus, setDeployStatus] = React.useState("")
   const [deployError, setDeployError] = React.useState<string | null>(null)
 
-  // Derive from persisted wizard state — survives refresh
-  const isDeployed = !!wizard.deployedAddresses
+  const deploymentMatchesConfig = wizard.deployedAddresses
+    ? wizard.deployedAddresses.hcaFactory.toLowerCase() === ADDRESSES.hcaFactory.toLowerCase()
+      && wizard.deployedAddresses.lamportVerifier.toLowerCase() === ADDRESSES.lamportVerifier.toLowerCase()
+      && wizard.deployedAddresses.ecdsaVerifier.toLowerCase() === ADDRESSES.ecdsaVerifier.toLowerCase()
+      && wizard.deployedAddresses.falconVerifier.toLowerCase() === ADDRESSES.falconVerifier.toLowerCase()
+    : false
+
+  // Derive from persisted wizard state — survives refresh, but invalidate stale deployments
+  // if the configured contract addresses changed since the last deploy.
+  const isDeployed = !!wizard.deployedAddresses && deploymentMatchesConfig
 
   const factoryConfigured = (ADDRESSES.hcaFactory as string) !== ''
   const wrongChain = isConnected && chainId !== sepolia.id
@@ -173,6 +181,19 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
 
           {deployError && (
             <p className="text-sm text-red-400">{deployError}</p>
+          )}
+
+          {wizard.deployedAddresses && !deploymentMatchesConfig && (
+            <div className="flex items-start gap-3 p-4 border border-yellow-600/40 bg-yellow-900/10 rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium text-yellow-400">Stored deployment is stale</p>
+                <p className="text-muted mt-1">
+                  The contract addresses in <code className="text-xs bg-[#161b22] px-1 py-0.5 rounded">.env.local</code> changed since this account
+                  was deployed. Deploy a fresh HCA account against the current verifier stack before signing.
+                </p>
+              </div>
+            </div>
           )}
 
           <Button

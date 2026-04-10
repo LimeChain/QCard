@@ -43,6 +43,7 @@ npm run dev
 | `NEXT_PUBLIC_ECDSA_VERIFIER` | Yes | ECDSAVerifier contract address |
 | `NEXT_PUBLIC_FALCON_VERIFIER` | No | FalconVerifier address (set to `0x0...0` if not deployed) |
 | `NEXT_PUBLIC_PIMLICO_API_KEY` | For PQC flow | ERC-4337 bundler key. Without it, the app falls back to direct MetaMask calls (no PQC verification on-chain). Free tier at [dashboard.pimlico.io](https://dashboard.pimlico.io/) |
+| `FALCON_ENGINE` | Optional for deploys | Existing ETHFALCON engine address. Leave unset to auto-deploy a fresh engine; set to `0x0...0` to skip Falcon support |
 
 ## Deploy Contracts
 
@@ -59,6 +60,8 @@ export SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_KEY
 ./scripts/deploy.sh
 ```
 
+By default, `./scripts/deploy.sh` deploys a fresh ETHFALCON engine, self-tests it on-chain with a known-good vector, then deploys `FalconVerifier` and the HCA factory against that engine. If you already trust an engine deployment, set `FALCON_ENGINE=0x...` before running the script. If you want to skip Falcon entirely, set `FALCON_ENGINE=0x0000000000000000000000000000000000000000`.
+
 Or manually:
 
 ```bash
@@ -70,7 +73,7 @@ forge script script/DeployHCA.s.sol \
   --private-key $PRIVATE_KEY
 ```
 
-After deploying, run `./scripts/wire.sh <factory> <lamport> <ecdsa> <falcon>` to update `.env.local`, or fill it in manually.
+After deploying, run `./scripts/wire.sh <factory> <lamport> <ecdsa> <falcon> [falcon_engine]` to update `.env.local`, or fill it in manually.
 
 Verify deployment: `./scripts/verify.sh`
 
