@@ -79,6 +79,16 @@ Verify deployment: `./scripts/verify.sh`
 
 ## Architecture
 
+![PQC HCA Architecture](docs/diagrams/architecture.png)
+
+The diagram above shows how the three layers connect:
+
+- **Browser (Next.js)** — runs the 6-step wizard, generates Lamport/ECDSA keys client-side, builds UserOperations, and either calls Pimlico for the PQC path or MetaMask for the ECDSA fallback.
+- **Off-chain services** — the Falcon Python backend (ZKNox reference signer), MetaMask (EOA funding + fallback signer), and the Pimlico ERC-4337 bundler.
+- **Smart contracts (Sepolia)** — the ERC-4337 EntryPoint, `HCAFactory`, `HCAAccount`, the live ZKNox ETHFALCON engine, and the three scheme verifiers selected by version byte (`0x01` Lamport, `0x02` Falcon, `0x03` ECDSA).
+
+Source: [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg).
+
 ### Why a bundler?
 
 Ethereum's protocol only validates ECDSA signatures. A Lamport-signed transaction can't be sent directly to the network — it would be rejected at the mempool level before reaching any contract. [ERC-4337 Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337) solves this by moving signature verification from the protocol into a smart contract:

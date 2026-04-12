@@ -1,0 +1,217 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 880" width="1280" height="880">
+  <style>text { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif; fill: #f0f6fc; }</style>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="50%" stop-color="#161b22"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+    <radialGradient id="glow-blue" cx="20%" cy="15%" r="50%">
+      <stop offset="0%" stop-color="rgba(88,166,255,0.18)"/>
+      <stop offset="100%" stop-color="rgba(88,166,255,0)"/>
+    </radialGradient>
+    <radialGradient id="glow-purple" cx="80%" cy="50%" r="45%">
+      <stop offset="0%" stop-color="rgba(188,140,255,0.16)"/>
+      <stop offset="100%" stop-color="rgba(188,140,255,0)"/>
+    </radialGradient>
+    <radialGradient id="glow-green" cx="30%" cy="85%" r="40%">
+      <stop offset="0%" stop-color="rgba(63,185,80,0.12)"/>
+      <stop offset="100%" stop-color="rgba(63,185,80,0)"/>
+    </radialGradient>
+    <radialGradient id="glow-orange" cx="75%" cy="80%" r="35%">
+      <stop offset="0%" stop-color="rgba(247,129,102,0.12)"/>
+      <stop offset="100%" stop-color="rgba(247,129,102,0)"/>
+    </radialGradient>
+    <linearGradient id="text-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#58a6ff"/>
+      <stop offset="100%" stop-color="#bc8cff"/>
+    </linearGradient>
+    <linearGradient id="text-grad-green" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3fb950"/>
+      <stop offset="100%" stop-color="#58a6ff"/>
+    </linearGradient>
+    <linearGradient id="text-grad-orange" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f78166"/>
+      <stop offset="100%" stop-color="#bc8cff"/>
+    </linearGradient>
+    <marker id="arrow-blue" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#58a6ff"/></marker>
+    <marker id="arrow-purple" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#bc8cff"/></marker>
+    <marker id="arrow-green" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#3fb950"/></marker>
+    <marker id="arrow-orange" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#f78166"/></marker>
+    <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1280" height="880" fill="url(#bg)"/>
+  <rect width="1280" height="880" fill="url(#glow-blue)"/>
+  <rect width="1280" height="880" fill="url(#glow-purple)"/>
+  <rect width="1280" height="880" fill="url(#glow-green)"/>
+  <rect width="1280" height="880" fill="url(#glow-orange)"/>
+  <text x="640" y="48" text-anchor="middle" font-size="26" font-weight="700" fill="url(#text-grad)">PQC HCA — Quantum-Resistant Ethereum Account Architecture</text>
+  <text x="640" y="74" text-anchor="middle" font-size="13" fill="#8b949e">EIP-8215 Hash-Committed Account · Lamport · Falcon · ECDSA · ERC-4337</text>
+  <rect x="40" y="100" width="1200" height="180" rx="14" fill="rgba(88,166,255,0.04)" stroke="rgba(88,166,255,0.18)" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="60" y="124" font-size="13" font-weight="600" fill="#58a6ff">BROWSER · Next.js 16 · React 19 · Wagmi · Viem</text>
+  <rect x="60" y="142" width="640" height="120" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+  <line x1="60" y1="143" x2="700" y2="143" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="380" y="166" text-anchor="middle" font-size="13" font-weight="600" fill="url(#text-grad)">6-Step Wizard (src/components/steps/)</text>
+  <rect x="72" y="180" width="96" height="64" rx="8" fill="rgba(88,166,255,0.10)" stroke="rgba(88,166,255,0.30)" stroke-width="1"/>
+  <text x="120" y="206" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">1. Configure</text>
+  <text x="120" y="224" text-anchor="middle" font-size="10" fill="#8b949e">pick schemes</text>
+  <rect x="177" y="180" width="96" height="64" rx="8" fill="rgba(88,166,255,0.10)" stroke="rgba(88,166,255,0.30)" stroke-width="1"/>
+  <text x="225" y="206" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">2. GenKeys</text>
+  <text x="225" y="224" text-anchor="middle" font-size="10" fill="#8b949e">CSPRNG seed</text>
+  <rect x="282" y="180" width="96" height="64" rx="8" fill="rgba(88,166,255,0.10)" stroke="rgba(88,166,255,0.30)" stroke-width="1"/>
+  <text x="330" y="206" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">3. Deploy</text>
+  <text x="330" y="224" text-anchor="middle" font-size="10" fill="#8b949e">HCAFactory</text>
+  <rect x="387" y="180" width="96" height="64" rx="8" fill="rgba(88,166,255,0.10)" stroke="rgba(88,166,255,0.30)" stroke-width="1"/>
+  <text x="435" y="206" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">4. Fund</text>
+  <text x="435" y="224" text-anchor="middle" font-size="10" fill="#8b949e">send ETH</text>
+  <rect x="492" y="180" width="96" height="64" rx="8" fill="rgba(88,166,255,0.10)" stroke="rgba(88,166,255,0.30)" stroke-width="1"/>
+  <text x="540" y="206" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">5. Sign+Submit</text>
+  <text x="540" y="224" text-anchor="middle" font-size="10" fill="#8b949e">PQC signing</text>
+  <rect x="597" y="180" width="96" height="64" rx="8" fill="rgba(88,166,255,0.10)" stroke="rgba(88,166,255,0.30)" stroke-width="1"/>
+  <text x="645" y="206" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">6. Verify</text>
+  <text x="645" y="224" text-anchor="middle" font-size="10" fill="#8b949e">on-chain</text>
+  <rect x="720" y="142" width="240" height="120" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+  <line x1="720" y1="143" x2="960" y2="143" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="840" y="166" text-anchor="middle" font-size="13" font-weight="600" fill="url(#text-grad-green)">Browser Crypto</text>
+  <text x="840" y="184" text-anchor="middle" font-size="10" fill="#8b949e">src/lib/crypto/</text>
+  <rect x="734" y="194" width="100" height="22" rx="6" fill="rgba(63,185,80,0.12)" stroke="rgba(63,185,80,0.35)"/>
+  <text x="784" y="209" text-anchor="middle" font-size="11" fill="#f0f6fc">Lamport</text>
+  <rect x="846" y="194" width="100" height="22" rx="6" fill="rgba(63,185,80,0.12)" stroke="rgba(63,185,80,0.35)"/>
+  <text x="896" y="209" text-anchor="middle" font-size="11" fill="#f0f6fc">ECDSA</text>
+  <rect x="734" y="222" width="212" height="28" rx="6" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.18)"/>
+  <text x="840" y="240" text-anchor="middle" font-size="11" fill="#8b949e">hca-keygen · keccak · seed (AES-GCM)</text>
+  <rect x="980" y="142" width="240" height="120" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+  <line x1="980" y1="143" x2="1220" y2="143" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="1100" y="166" text-anchor="middle" font-size="13" font-weight="600" fill="url(#text-grad-orange)">AA Client</text>
+  <text x="1100" y="184" text-anchor="middle" font-size="10" fill="#8b949e">src/lib/bundler/</text>
+  <rect x="994" y="194" width="212" height="22" rx="6" fill="rgba(247,129,102,0.12)" stroke="rgba(247,129,102,0.35)"/>
+  <text x="1100" y="209" text-anchor="middle" font-size="11" fill="#f0f6fc">userop.ts (UserOperation builder)</text>
+  <rect x="994" y="222" width="212" height="28" rx="6" fill="rgba(247,129,102,0.12)" stroke="rgba(247,129,102,0.35)"/>
+  <text x="1100" y="240" text-anchor="middle" font-size="11" fill="#f0f6fc">pimlico.ts (bundler RPC client)</text>
+  <rect x="40" y="310" width="1200" height="160" rx="14" fill="rgba(188,140,255,0.04)" stroke="rgba(188,140,255,0.18)" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="60" y="334" font-size="13" font-weight="600" fill="#bc8cff">OFF-CHAIN SERVICES</text>
+  <rect x="60" y="354" width="380" height="100" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+  <line x1="60" y1="355" x2="440" y2="355" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="250" y="378" text-anchor="middle" font-size="13" font-weight="600" fill="url(#text-grad-orange)">Falcon Python Backend</text>
+  <text x="250" y="396" text-anchor="middle" font-size="10" fill="#8b949e">/api/falcon/{keygen,sign} → falcon_service.py</text>
+  <rect x="74" y="406" width="170" height="38" rx="6" fill="rgba(247,129,102,0.10)" stroke="rgba(247,129,102,0.30)"/>
+  <text x="159" y="423" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">ZKNox ETHFALCON</text>
+  <text x="159" y="437" text-anchor="middle" font-size="10" fill="#8b949e">reference signer</text>
+  <rect x="256" y="406" width="170" height="38" rx="6" fill="rgba(247,129,102,0.10)" stroke="rgba(247,129,102,0.30)"/>
+  <text x="341" y="423" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">NTRU Keygen</text>
+  <text x="341" y="437" text-anchor="middle" font-size="10" fill="#8b949e">Keccak-PRNG</text>
+  <rect x="460" y="354" width="320" height="100" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+  <line x1="460" y1="355" x2="780" y2="355" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="620" y="378" text-anchor="middle" font-size="13" font-weight="600" fill="url(#text-grad)">MetaMask Wallet</text>
+  <text x="620" y="396" text-anchor="middle" font-size="10" fill="#8b949e">EOA signer · funder · prefunding source</text>
+  <rect x="474" y="406" width="292" height="38" rx="6" fill="rgba(88,166,255,0.10)" stroke="rgba(88,166,255,0.30)"/>
+  <text x="620" y="423" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">Direct Wallet Mode (fallback)</text>
+  <text x="620" y="437" text-anchor="middle" font-size="10" fill="#8b949e">ECDSA tx → execute() · skips PQC verification</text>
+  <rect x="800" y="354" width="420" height="100" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+  <line x1="800" y1="355" x2="1220" y2="355" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="1010" y="378" text-anchor="middle" font-size="13" font-weight="600" fill="url(#text-grad-orange)">Pimlico Bundler  ·  ERC-4337</text>
+  <text x="1010" y="396" text-anchor="middle" font-size="10" fill="#8b949e">wraps PQC UserOp into ECDSA-signed tx → mempool</text>
+  <rect x="814" y="406" width="195" height="38" rx="6" fill="rgba(247,129,102,0.10)" stroke="rgba(247,129,102,0.30)"/>
+  <text x="911" y="423" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">eth_estimateUserOpGas</text>
+  <text x="911" y="437" text-anchor="middle" font-size="10" fill="#8b949e">gas pricing</text>
+  <rect x="1021" y="406" width="195" height="38" rx="6" fill="rgba(247,129,102,0.10)" stroke="rgba(247,129,102,0.30)"/>
+  <text x="1118" y="423" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">eth_sendUserOperation</text>
+  <text x="1118" y="437" text-anchor="middle" font-size="10" fill="#8b949e">submit to EntryPoint</text>
+  <rect x="40" y="500" width="1200" height="320" rx="14" fill="rgba(63,185,80,0.04)" stroke="rgba(63,185,80,0.18)" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="60" y="524" font-size="13" font-weight="600" fill="#3fb950">SMART CONTRACTS · Sepolia · Solidity 0.8.34 · Foundry</text>
+  <rect x="60" y="544" width="280" height="80" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+  <line x1="60" y1="545" x2="340" y2="545" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="200" y="568" text-anchor="middle" font-size="13" font-weight="600" fill="url(#text-grad-orange)">EntryPoint  ·  ERC-4337</text>
+  <text x="200" y="586" text-anchor="middle" font-size="10" fill="#8b949e">canonical singleton</text>
+  <text x="200" y="606" text-anchor="middle" font-size="11" fill="#f0f6fc">handleOps()  →  validate + execute</text>
+  <rect x="360" y="544" width="240" height="80" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+  <line x1="360" y1="545" x2="600" y2="545" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="480" y="568" text-anchor="middle" font-size="13" font-weight="600" fill="url(#text-grad)">HCAFactory.sol</text>
+  <text x="480" y="586" text-anchor="middle" font-size="10" fill="#8b949e">CREATE2 deployer</text>
+  <text x="480" y="606" text-anchor="middle" font-size="11" fill="#f0f6fc">createAccount(authRoot)</text>
+  <rect x="620" y="544" width="280" height="80" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+  <line x1="620" y1="545" x2="900" y2="545" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="760" y="568" text-anchor="middle" font-size="13" font-weight="600" fill="url(#text-grad)">HCAAccount.sol</text>
+  <text x="760" y="586" text-anchor="middle" font-size="10" fill="#8b949e">smart account · per-user</text>
+  <text x="760" y="606" text-anchor="middle" font-size="11" fill="#f0f6fc">validateUserOp() · execute()</text>
+  <rect x="920" y="544" width="300" height="80" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+  <line x1="920" y1="545" x2="1220" y2="545" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="1070" y="568" text-anchor="middle" font-size="13" font-weight="600" fill="url(#text-grad-orange)">ZKNOX ETHFALCON Engine</text>
+  <text x="1070" y="586" text-anchor="middle" font-size="10" fill="#8b949e">on-chain Falcon-512 verifier</text>
+  <text x="1070" y="606" text-anchor="middle" font-size="11" fill="#f0f6fc">NTT · poly arithmetic · norm check</text>
+  <text x="640" y="654" text-anchor="middle" font-size="12" font-weight="600" fill="#8b949e">SCHEME-AGNOSTIC VERIFIERS  ·  contracts/src/verifiers/  ·  selected by version byte</text>
+  <rect x="120" y="670" width="320" height="130" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(63,185,80,0.30)" stroke-width="1.5"/>
+  <line x1="120" y1="671" x2="440" y2="671" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="280" y="694" text-anchor="middle" font-size="14" font-weight="700" fill="url(#text-grad-green)">LamportVerifier</text>
+  <rect x="135" y="706" width="60" height="22" rx="11" fill="rgba(63,185,80,0.18)" stroke="rgba(63,185,80,0.45)"/>
+  <text x="165" y="722" text-anchor="middle" font-size="11" font-weight="600" fill="#3fb950">v 0x01</text>
+  <text x="208" y="722" font-size="11" fill="#8b949e">~297K gas</text>
+  <text x="280" y="752" text-anchor="middle" font-size="11" fill="#f0f6fc">Hash-based one-time signatures</text>
+  <text x="280" y="770" text-anchor="middle" font-size="10" fill="#8b949e">256 keccak preimages · OTS</text>
+  <text x="280" y="788" text-anchor="middle" font-size="10" fill="#8b949e">quantum-secure · large sigs</text>
+  <rect x="480" y="670" width="320" height="130" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(247,129,102,0.30)" stroke-width="1.5"/>
+  <line x1="480" y1="671" x2="800" y2="671" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="640" y="694" text-anchor="middle" font-size="14" font-weight="700" fill="url(#text-grad-orange)">FalconVerifier</text>
+  <rect x="495" y="706" width="60" height="22" rx="11" fill="rgba(247,129,102,0.18)" stroke="rgba(247,129,102,0.45)"/>
+  <text x="525" y="722" text-anchor="middle" font-size="11" font-weight="600" fill="#f78166">v 0x02</text>
+  <text x="568" y="722" font-size="11" fill="#8b949e">~1.5M gas</text>
+  <text x="640" y="752" text-anchor="middle" font-size="11" fill="#f0f6fc">Lattice-based · NIST PQC</text>
+  <text x="640" y="770" text-anchor="middle" font-size="10" fill="#8b949e">delegates → ZKNox engine</text>
+  <text x="640" y="788" text-anchor="middle" font-size="10" fill="#8b949e">compact sig · reusable key</text>
+  <rect x="840" y="670" width="320" height="130" rx="12" fill="rgba(255,255,255,0.04)" stroke="rgba(88,166,255,0.30)" stroke-width="1.5"/>
+  <line x1="840" y1="671" x2="1160" y2="671" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="1000" y="694" text-anchor="middle" font-size="14" font-weight="700" fill="url(#text-grad)">ECDSAVerifier</text>
+  <rect x="855" y="706" width="60" height="22" rx="11" fill="rgba(88,166,255,0.18)" stroke="rgba(88,166,255,0.45)"/>
+  <text x="885" y="722" text-anchor="middle" font-size="11" font-weight="600" fill="#58a6ff">v 0x03</text>
+  <text x="928" y="722" font-size="11" fill="#8b949e">~25K gas</text>
+  <text x="1000" y="752" text-anchor="middle" font-size="11" fill="#f0f6fc">secp256k1 · backward compat</text>
+  <text x="1000" y="770" text-anchor="middle" font-size="10" fill="#8b949e">NOT quantum-resistant</text>
+  <text x="1000" y="788" text-anchor="middle" font-size="10" fill="#8b949e">migration bridge</text>
+  <path d="M 700,202 L 720,202" stroke="#3fb950" stroke-width="1.8" fill="none" marker-end="url(#arrow-green)"/>
+  <path d="M 700,222 L 980,222" stroke="#f78166" stroke-width="1.8" fill="none" marker-end="url(#arrow-orange)"/>
+  <path d="M 280,262 C 280,300 250,320 250,354" stroke="#bc8cff" stroke-width="1.8" fill="none" marker-end="url(#arrow-purple)"/>
+  <rect x="206" y="298" width="116" height="20" rx="4" fill="#0d1117" opacity="0.92"/>
+  <text x="264" y="312" text-anchor="middle" font-size="11" fill="#bc8cff">POST /api/falcon</text>
+  <path d="M 480,262 L 540,262 L 540,354" stroke="#58a6ff" stroke-width="1.8" fill="none" marker-end="url(#arrow-blue)"/>
+  <rect x="488" y="304" width="105" height="20" rx="4" fill="#0d1117" opacity="0.92"/>
+  <text x="540" y="318" text-anchor="middle" font-size="11" fill="#58a6ff">eth_sendTx</text>
+  <path d="M 1100,262 L 1100,354" stroke="#f78166" stroke-width="1.8" fill="none" marker-end="url(#arrow-orange)"/>
+  <rect x="1052" y="296" width="96" height="20" rx="4" fill="#0d1117" opacity="0.92"/>
+  <text x="1100" y="310" text-anchor="middle" font-size="11" fill="#f78166">PQC UserOp</text>
+  <path d="M 540,454 L 540,500 L 480,500 L 480,544" stroke="#58a6ff" stroke-width="1.8" fill="none" marker-end="url(#arrow-blue)"/>
+  <rect x="430" y="486" width="120" height="20" rx="4" fill="#0d1117" opacity="0.92"/>
+  <text x="490" y="500" text-anchor="middle" font-size="11" fill="#58a6ff">createAccount()</text>
+  <path d="M 1010,454 L 1010,490 L 200,490 L 200,544" stroke="#f78166" stroke-width="1.8" fill="none" marker-end="url(#arrow-orange)"/>
+  <rect x="540" y="476" width="138" height="20" rx="4" fill="#0d1117" opacity="0.92"/>
+  <text x="609" y="490" text-anchor="middle" font-size="11" fill="#f78166">handleOps(userOps[])</text>
+  <path d="M 340,584 L 620,584" stroke="#bc8cff" stroke-width="1.8" fill="none" marker-end="url(#arrow-purple)"/>
+  <rect x="408" y="572" width="144" height="20" rx="4" fill="#0d1117" opacity="0.92"/>
+  <text x="480" y="586" text-anchor="middle" font-size="11" fill="#bc8cff">validateUserOp() →</text>
+  <path d="M 720,624 L 280,670" stroke="#3fb950" stroke-width="1.5" fill="none" marker-end="url(#arrow-green)" opacity="0.85"/>
+  <path d="M 760,624 L 640,670" stroke="#f78166" stroke-width="1.5" fill="none" marker-end="url(#arrow-orange)" opacity="0.85"/>
+  <path d="M 800,624 L 1000,670" stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#arrow-blue)" opacity="0.85"/>
+  <rect x="722" y="638" width="76" height="18" rx="4" fill="#0d1117" opacity="0.92"/>
+  <text x="760" y="651" text-anchor="middle" font-size="10" fill="#bc8cff">dispatch[v]</text>
+  <path d="M 700,670 C 760,640 900,632 1000,624" stroke="#f78166" stroke-width="1.4" fill="none" stroke-dasharray="5,3" marker-end="url(#arrow-orange)" opacity="0.85"/>
+  <rect x="826" y="618" width="106" height="18" rx="4" fill="#0d1117" opacity="0.92"/>
+  <text x="879" y="631" text-anchor="middle" font-size="10" fill="#f78166">engine.verify()</text>
+  <path d="M 440,406 C 700,406 900,290 980,250" stroke="#bc8cff" stroke-width="1.4" fill="none" stroke-dasharray="5,3" marker-end="url(#arrow-purple)" opacity="0.75"/>
+  <rect x="700" y="346" width="120" height="18" rx="4" fill="#0d1117" opacity="0.92"/>
+  <text x="760" y="359" text-anchor="middle" font-size="10" fill="#bc8cff">Falcon sig bytes</text>
+  <rect x="40" y="838" width="1200" height="32" rx="8" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.10)"/>
+  <text x="60" y="858" font-size="11" fill="#8b949e" font-weight="600">LEGEND</text>
+  <line x1="120" y1="854" x2="146" y2="854" stroke="#58a6ff" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="156" y="858" font-size="11" fill="#f0f6fc">EOA / wallet tx</text>
+  <line x1="270" y1="854" x2="296" y2="854" stroke="#3fb950" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="306" y="858" font-size="11" fill="#f0f6fc">browser-side crypto</text>
+  <line x1="450" y1="854" x2="476" y2="854" stroke="#f78166" stroke-width="2" marker-end="url(#arrow-orange)"/>
+  <text x="486" y="858" font-size="11" fill="#f0f6fc">ERC-4337 / bundler</text>
+  <line x1="630" y1="854" x2="656" y2="854" stroke="#bc8cff" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <text x="666" y="858" font-size="11" fill="#f0f6fc">PQC verification path</text>
+  <line x1="830" y1="854" x2="876" y2="854" stroke="#bc8cff" stroke-width="1.4" stroke-dasharray="5,3"/>
+  <text x="886" y="858" font-size="11" fill="#f0f6fc">internal call / data return</text>
+  <text x="1220" y="858" text-anchor="end" font-size="11" fill="#8b949e">Network: Sepolia testnet</text>
+</svg>
