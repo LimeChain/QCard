@@ -4,16 +4,14 @@ Interactive wizard for creating and using quantum-resistant Ethereum accounts. S
 
 ## What It Does
 
-A 6-step browser wizard that creates a quantum-resistant smart account on Sepolia:
+The app has two 6-step flows on Sepolia:
 
-1. **Configure** -- pick signature schemes per leaf (Lamport, Falcon, ECDSA)
-2. **Generate Keys** -- browser-side keygen via CSPRNG + keccak256 (seed never leaves the browser)
-3. **Deploy** -- deploy HCA smart account via factory contract
-4. **Fund** -- send test ETH to the account
-5. **Sign & Submit** -- sign a transaction with a PQC key, submit via bundler
-6. **Verify** -- confirm the PQC transaction on-chain
+1. **HCA flow**
+   configure mixed leaves (Lamport/Falcon/ECDSA), generate Merkle root, deploy `HCAAccount`, fund, sign UserOperation, verify.
+2. **PQC-4337 flow**
+   select one scheme (`falcon-eth` or `mldsa-eth`), generate keypair in browser, register key + deploy scheme-specific account, fund, sign UserOperation, verify.
 
-All crypto runs in the browser. No backend. The seed is encrypted with AES-256-GCM before storage.
+Both flows use ERC-4337 submission (Pimlico) for on-chain PQC verification.
 
 ## Quick Start
 
@@ -25,24 +23,29 @@ npm install
 cp .env.example .env.local
 # Fill in contract addresses (deploy your own or get from your team) and Pimlico API key
 
-# Set up the Falcon backend (Python venv for ZKNox ETHFALCON signer)
+# Optional: needed only for HCA Falcon leaves (not needed for PQC-4337 flow)
 ./scripts/setup-falcon.sh
 
 npm run dev
 # Open http://localhost:3000
 ```
 
-> **Why Python?** Browser Falcon libraries (`js-fn-dsa`, `@noble/post-quantum`, `@tectonic-labs/bedrock-wasm`) don't produce byte-compatible output for ZKNox's on-chain ETHFALCON verifier. We shell out to ZKNox's reference Python signer via `/api/falcon/{keygen,sign}` to get signatures that verify on-chain. Lamport and ECDSA leaves stay fully browser-side.
+> **Why Python in this repo?** This is required only for **HCA Falcon leaves** (`/api/falcon/{keygen,sign}` against the ZKNox reference signer).  
+> The **PQC-4337 flow** signs in browser with `@noble/post-quantum`.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
+| `NEXT_PUBLIC_ENTRYPOINT_V07` | Yes for PQC-4337 | EntryPoint v0.7 address used by PQC-4337 user-ops |
 | `NEXT_PUBLIC_HCA_FACTORY` | Yes | HCAFactory contract address |
 | `NEXT_PUBLIC_LAMPORT_VERIFIER` | Yes | LamportVerifier contract address |
 | `NEXT_PUBLIC_ECDSA_VERIFIER` | Yes | ECDSAVerifier contract address |
 | `NEXT_PUBLIC_FALCON_VERIFIER` | No | FalconVerifier address (set to `0x0...0` if not deployed) |
-| `NEXT_PUBLIC_PIMLICO_API_KEY` | For PQC flow | ERC-4337 bundler key. Without it, the app falls back to direct MetaMask calls (no PQC verification on-chain). Free tier at [dashboard.pimlico.io](https://dashboard.pimlico.io/) |
+| `NEXT_PUBLIC_PQC4337_FACTORY` | Yes for PQC-4337 | Factory for scheme-specific PQC-4337 accounts |
+| `NEXT_PUBLIC_FALCON_ETH_VERIFIER` | Yes for `falcon-eth` flow | ZKNOX ETHFALCON verifier used by PQC-4337 flow |
+| `NEXT_PUBLIC_MLDSA_ETH_VERIFIER` | Yes for `mldsa-eth` flow | ZKNOX ETHDILITHIUM verifier used by PQC-4337 flow |
+| `NEXT_PUBLIC_PIMLICO_API_KEY` | Recommended | ERC-4337 bundler key. Without it, app can fall back to direct wallet execution (no on-chain PQC `validateUserOp` path). Free tier at [dashboard.pimlico.io](https://dashboard.pimlico.io/) |
 | `FALCON_ENGINE` | Optional for deploys | Existing ETHFALCON engine address. Leave unset to auto-deploy a fresh engine; set to `0x0...0` to skip Falcon support |
 
 ## Deploy Contracts
@@ -94,51 +97,66 @@ Verify deployment: `./scripts/verify.sh`
 
 The diagram above shows how the three layers connect:
 
-- **Browser (Next.js)** — runs the 6-step wizard, generates Lamport/ECDSA keys client-side, builds UserOperations, and either calls Pimlico for the PQC path or MetaMask for the ECDSA fallback.
-- **Off-chain services** — the Falcon Python backend (ZKNox reference signer), MetaMask (EOA funding + fallback signer), and the Pimlico ERC-4337 bundler.
-- **Smart contracts (Sepolia)** — the ERC-4337 EntryPoint, `HCAFactory`, `HCAAccount`, the live ZKNox ETHFALCON engine, and the three scheme verifiers selected by version byte (`0x01` Lamport, `0x02` Falcon, `0x03` ECDSA).
+- **Browser (Next.js)** — runs both flows, builds UserOperations, and signs either with HCA leaf logic or PQC-4337 scheme-specific keys.
+- **Off-chain services** — Pimlico ERC-4337 bundler, MetaMask for funding/fallback direct calls, and optional Falcon Python backend for HCA Falcon leaves.
+- **Smart contracts (Sepolia)** — `HCAFactory`/`HCAAccount` stack and `PqcAccountFactory` with scheme-specific accounts/verifiers.
 
 Source: [`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg).
 
 ### Why a bundler?
 
-Ethereum's protocol only validates ECDSA signatures. A Lamport-signed transaction can't be sent directly to the network — it would be rejected at the mempool level before reaching any contract. [ERC-4337 Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337) solves this by moving signature verification from the protocol into a smart contract:
+Ethereum's protocol only validates ECDSA signatures. PQC signatures (Lamport/Falcon-ETH/ML-DSA-ETH) cannot enter mempool directly. [ERC-4337 Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337) solves this by moving signature verification into smart contracts:
 
 1. **You** build a UserOperation (a data blob, not a transaction) and sign it with your PQC key
 2. **The bundler** (Pimlico) wraps your UserOperation in a regular ECDSA-signed transaction and submits it to the EntryPoint contract
-3. **The EntryPoint** calls your HCA account's `validateUserOp()`, which verifies the PQC signature on-chain
+3. **The EntryPoint** calls your account's `validateUserOp()`, which verifies the PQC signature on-chain
 4. **If valid**, the EntryPoint calls `execute()` to perform the actual action (send ETH, call a contract, etc.)
 
-The bundler is the bridge between PQC-signed intents and Ethereum's ECDSA-only mempool. Without it, there's no way to get a Lamport or Falcon signature verified on-chain. The app's "Direct Wallet Mode" fallback calls `execute()` from MetaMask directly — but that uses regular ECDSA and skips PQC verification entirely.
+The bundler is the bridge between PQC-signed intents and Ethereum's ECDSA-only mempool. Without it, there is no `validateUserOp` path for PQC verification. The app's direct wallet fallback calls `execute()` from MetaMask, which skips PQC verification.
 
 [Pimlico](https://pimlico.io/) is the bundler service used here. Free tier works for testnet. Get an API key at [dashboard.pimlico.io](https://dashboard.pimlico.io/).
 
-### Flow
+### HCA Flow
 
-```
+```text
 Browser (Next.js)                    Sepolia
   |                                      |
   |-- 1. Generate seed (CSPRNG)          |
-  |-- 2. Derive Lamport keypairs         |
+  |-- 2. Derive Lamport/Falcon/ECDSA leaves
   |-- 3. Compute authRoot (Merkle)       |
   |                                      |
-  |-- 4. Deploy HCAAccount -----------> Factory.createAccount(authRoot)
+  |-- 4. Deploy HCAAccount -----------> HCAFactory.createAccount(authRoot)
   |-- 5. Fund account ----------------> send ETH
   |                                      |
-  |-- 6. Sign userOpHash (PQC key)       |
+  |-- 6. Sign userOpHash (leaf key)      |
   |-- 7. Submit UserOp ------.           |
   |                           |          |
   |    Pimlico bundler <------'          |
-  |      wraps UserOp in a regular       |
-  |      ECDSA tx and calls:             |
   |                           |          |
   |                           '-------> EntryPoint.handleOps()
   |                                      |-> HCAAccount.validateUserOp()
-  |                                      |     verify Merkle proof
-  |                                      |     dispatch to verifier[version]
-  |                                      |     LamportVerifier.verify() <-- PQC check
+  |                                      |     verify Merkle proof + verifier dispatch
   |                                      |-> HCAAccount.execute()
-  |                                      |     send ETH to recipient
+```
+
+### PQC-4337 Flow (falcon-eth / mldsa-eth)
+
+```text
+Browser (Next.js)                         Sepolia
+  |                                           |
+  |-- 1. Generate keypair in browser          |
+  |-- 2. Deploy via factory ----------------> PqcAccountFactory.create*WithKey()
+  |                                           |-> verifier.setKey(encodedPublicKey)
+  |                                           |-> deploy scheme-specific account
+  |-- 3. Fund account ----------------------> send ETH
+  |-- 4. Build + sign UserOp (browser)        |
+  |-- 5. Submit UserOp ---------.             |
+  |                            |              |
+  |    Pimlico bundler <-------'              |
+  |                            |              |
+  |                            '-----------> EntryPoint v0.7.handleOps()
+  |                                           |-> FalconEthAccount / MlDsaEthAccount.validateUserOp()
+  |                                           |-> execute()
 ```
 
 ## Version Bytes
