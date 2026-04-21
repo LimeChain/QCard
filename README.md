@@ -1,6 +1,6 @@
-# PQC HCA PoC
+# PQC ETH PoC
 
-Interactive wizard for creating and using quantum-resistant Ethereum accounts. Implements the [Hash-Committed Account (HCA)](https://ethereum-magicians.org/t/eip-8215-hash-committed-account-hca/28094) model with scheme-agnostic Merkle leaves.
+Interactive wizard for creating and using quantum-resistant Ethereum accounts. Supports both the [Hash-Committed Account (HCA)](https://ethereum-magicians.org/t/eip-8215-hash-committed-account-hca/28094) flow and the PQC-4337 scheme-specific account flow.
 
 ## What It Does
 
@@ -18,8 +18,8 @@ All crypto runs in the browser. No backend. The seed is encrypted with AES-256-G
 ## Quick Start
 
 ```bash
-git clone --recurse-submodules https://github.com/LimeChain/pqc-hca-poc.git
-cd pqc-hca-poc
+git clone --recurse-submodules https://github.com/LimeChain/pqc-eth-poc.git
+cd pqc-eth-poc
 npm install
 
 cp .env.example .env.local
