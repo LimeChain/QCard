@@ -10,7 +10,10 @@ import { parseEther, formatEther } from "viem"
 
 export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => void }) {
   const wizard = useWizard()
-  const accountAddress = wizard.deployedAddresses?.hcaAccount ?? ''
+  const isPqcFlow = wizard.activeFlow === "pqc4337"
+  const accountAddress = isPqcFlow
+    ? wizard.pqc4337.deployment?.accountAddress ?? ''
+    : wizard.deployedAddresses?.hcaAccount ?? ''
   const [fundAmount, setFundAmount] = React.useState("0.3")
 
   const {
@@ -61,7 +64,11 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
       <Card>
         <CardHeader>
           <CardTitle>Fund Account</CardTitle>
-          <CardDescription>Send testnet ETH to pay for transaction gas</CardDescription>
+          <CardDescription>
+            {isPqcFlow
+              ? "Send testnet ETH to your PQC account to cover UserOperation prefund"
+              : "Send testnet ETH to pay for transaction gas"}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
            <div className="flex flex-col md:flex-row items-center gap-8">
@@ -132,7 +139,7 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
                </div>
              )}
              <p className="text-[11px] text-muted">
-               <strong>Minimum:</strong> 0.3 ETH. The bundler&apos;s gas estimation simulates at up to 10M verification gas, so the upfront prefund check can be ~0.1 ETH even though the real PQC verification only uses ~2M gas. Lower balances can trigger <code className="text-[10px] bg-[#161b22] px-1 rounded">AA21 didn&apos;t pay prefund</code>.
+               <strong>Minimum:</strong> 0.3 ETH. Bundler simulation can overestimate verification gas and require larger prefund headroom; low balances can trigger <code className="text-[10px] bg-[#161b22] px-1 rounded">AA21 didn&apos;t pay prefund</code>.
              </p>
              {hasFunds && !isFunding && (
                <p className="text-xs text-green-400 text-center">Account is funded. You can send more or proceed to the next step.</p>

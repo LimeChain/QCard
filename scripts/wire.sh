@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
 # Write deployed contract addresses to .env.local
-# Usage: ./scripts/wire.sh <factory> <lamport> <ecdsa> <falcon> [falcon_engine]
+# Usage:
+#   ./scripts/wire.sh <hca_factory> <lamport> <ecdsa> <falcon> <pqc_factory> <falcon_eth_verifier> <mldsa_eth_verifier> <entrypoint_v07> [falcon_engine]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENV_FILE="$(cd "$SCRIPT_DIR/.." && pwd)/.env.local"
+ENV_FILE="${ENV_FILE:-$(cd "$SCRIPT_DIR/.." && pwd)/.env.local}"
 
-FACTORY="${1:?Usage: wire.sh <factory> <lamport> <ecdsa> <falcon> [falcon_engine]}"
-LAMPORT="${2:?Usage: wire.sh <factory> <lamport> <ecdsa> <falcon> [falcon_engine]}"
-ECDSA="${3:?Usage: wire.sh <factory> <lamport> <ecdsa> <falcon> [falcon_engine]}"
+FACTORY="${1:?Usage: wire.sh <hca_factory> <lamport> <ecdsa> <falcon> <pqc_factory> <falcon_eth_verifier> <mldsa_eth_verifier> <entrypoint_v07> [falcon_engine]}"
+LAMPORT="${2:?Usage: wire.sh <hca_factory> <lamport> <ecdsa> <falcon> <pqc_factory> <falcon_eth_verifier> <mldsa_eth_verifier> <entrypoint_v07> [falcon_engine]}"
+ECDSA="${3:?Usage: wire.sh <hca_factory> <lamport> <ecdsa> <falcon> <pqc_factory> <falcon_eth_verifier> <mldsa_eth_verifier> <entrypoint_v07> [falcon_engine]}"
 FALCON="${4:-0x0000000000000000000000000000000000000000}"
-FALCON_ENGINE_ARG="${5:-}"
+PQC4337_FACTORY="${5:?Usage: wire.sh <hca_factory> <lamport> <ecdsa> <falcon> <pqc_factory> <falcon_eth_verifier> <mldsa_eth_verifier> <entrypoint_v07> [falcon_engine]}"
+FALCON_ETH_VERIFIER="${6:?Usage: wire.sh <hca_factory> <lamport> <ecdsa> <falcon> <pqc_factory> <falcon_eth_verifier> <mldsa_eth_verifier> <entrypoint_v07> [falcon_engine]}"
+MLDSA_ETH_VERIFIER="${7:?Usage: wire.sh <hca_factory> <lamport> <ecdsa> <falcon> <pqc_factory> <falcon_eth_verifier> <mldsa_eth_verifier> <entrypoint_v07> [falcon_engine]}"
+ENTRYPOINT_V07="${8:?Usage: wire.sh <hca_factory> <lamport> <ecdsa> <falcon> <pqc_factory> <falcon_eth_verifier> <mldsa_eth_verifier> <entrypoint_v07> [falcon_engine]}"
+FALCON_ENGINE_ARG="${9:-}"
 
 # Preserve existing non-address vars
 PIMLICO_KEY=""
@@ -31,10 +36,14 @@ elif [ -n "${FALCON_ENGINE:-}" ]; then
 fi
 
 cat > "$ENV_FILE" << EOF
+NEXT_PUBLIC_ENTRYPOINT_V07=$ENTRYPOINT_V07
 NEXT_PUBLIC_HCA_FACTORY=$FACTORY
 NEXT_PUBLIC_LAMPORT_VERIFIER=$LAMPORT
 NEXT_PUBLIC_ECDSA_VERIFIER=$ECDSA
 NEXT_PUBLIC_FALCON_VERIFIER=$FALCON
+NEXT_PUBLIC_PQC4337_FACTORY=$PQC4337_FACTORY
+NEXT_PUBLIC_FALCON_ETH_VERIFIER=$FALCON_ETH_VERIFIER
+NEXT_PUBLIC_MLDSA_ETH_VERIFIER=$MLDSA_ETH_VERIFIER
 NEXT_PUBLIC_PIMLICO_API_KEY=$PIMLICO_KEY
 EOF
 
@@ -44,8 +53,12 @@ EOF
 [ -n "$FALCON_ENGINE_VAL" ] && echo "FALCON_ENGINE=$FALCON_ENGINE_VAL" >> "$ENV_FILE"
 
 echo "Wrote to $ENV_FILE:"
-echo "  Factory:  $FACTORY"
-echo "  Lamport:  $LAMPORT"
-echo "  ECDSA:    $ECDSA"
-echo "  Falcon:   $FALCON"
+echo "  HCAFactory:         $FACTORY"
+echo "  LamportVerifier:    $LAMPORT"
+echo "  ECDSAVerifier:      $ECDSA"
+echo "  FalconVerifier:     $FALCON"
+echo "  EntryPointV07:      $ENTRYPOINT_V07"
+echo "  Pqc4337Factory:     $PQC4337_FACTORY"
+echo "  FalconEthVerifier:  $FALCON_ETH_VERIFIER"
+echo "  MlDsaEthVerifier:   $MLDSA_ETH_VERIFIER"
 [ -n "$FALCON_ENGINE_VAL" ] && echo "  Engine:   $FALCON_ENGINE_VAL"

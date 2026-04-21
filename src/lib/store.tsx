@@ -6,6 +6,9 @@ import * as React from "react"
 // Types
 // ---------------------------------------------------------------------------
 
+export type AppFlow = "hca" | "pqc4337"
+export type Pqc4337Scheme = "falcon-eth" | "mldsa-eth"
+
 export interface LeafConfig {
   index: number
   scheme: 'Lamport' | 'Falcon' | 'ECDSA'
@@ -28,7 +31,41 @@ export interface FalconLeafKey {
   pkCompact: string[]
 }
 
+export interface Pqc4337Keypair {
+  publicKeyHex: `0x${string}`
+  secretKeyHex: `0x${string}`
+  encodedPublicKey: `0x${string}`
+}
+
+export interface Pqc4337Registration {
+  verifierAddress: `0x${string}`
+  publicKeyPointer: `0x${string}`
+  txHash: string | null
+}
+
+export interface Pqc4337Deployment {
+  scheme: Pqc4337Scheme
+  accountAddress: `0x${string}`
+  factoryAddress: `0x${string}`
+  verifierAddress: `0x${string}`
+  entryPointAddress: `0x${string}`
+  publicKeyPointer: `0x${string}`
+  ownerAddress: `0x${string}`
+  salt: string
+}
+
+export interface Pqc4337State {
+  scheme: Pqc4337Scheme
+  keypair: Pqc4337Keypair | null
+  registration: Pqc4337Registration | null
+  deployment: Pqc4337Deployment | null
+  lastTxHash: string | null
+  lastUserOpHash: string | null
+  pimlicoApiKey: string
+}
+
 export interface WizardState {
+  activeFlow: AppFlow
   leafCount: number
   leaves: LeafConfig[]
   masterSeed: Uint8Array | null
@@ -41,9 +78,11 @@ export interface WizardState {
   deployedAddresses: DeployedAddresses | null
   lastTxHash: string | null
   pimlicoApiKey: string
+  pqc4337: Pqc4337State
 }
 
 interface WizardActions {
+  setActiveFlow: (flow: AppFlow) => void
   setLeafConfig: (leafCount: number, leaves: LeafConfig[]) => void
   setKeygenResult: (data: {
     masterSeed: Uint8Array
@@ -58,6 +97,14 @@ interface WizardActions {
   setLastTxHash: (hash: string) => void
   setPimlicoApiKey: (key: string) => void
   markLeafUsed: (leafIndex: number) => void
+  setPqc4337Scheme: (scheme: Pqc4337Scheme) => void
+  setPqc4337Keypair: (keypair: Pqc4337Keypair) => void
+  setPqc4337Registration: (registration: Pqc4337Registration) => void
+  setPqc4337Deployment: (deployment: Pqc4337Deployment) => void
+  setPqc4337LastTxHash: (hash: string) => void
+  setPqc4337LastUserOpHash: (hash: string) => void
+  setPqc4337PimlicoApiKey: (key: string) => void
+  resetPqc4337: () => void
   reset: () => void
 }
 
@@ -83,6 +130,7 @@ function fromHex(hex: string): Uint8Array {
 }
 
 interface SerializedState {
+  activeFlow: AppFlow
   leafCount: number
   leaves: LeafConfig[]
   masterSeedHex: string | null
@@ -95,10 +143,12 @@ interface SerializedState {
   deployedAddresses: DeployedAddresses | null
   lastTxHash: string | null
   pimlicoApiKey: string
+  pqc4337: Pqc4337State
 }
 
 function serialize(state: WizardState): string {
   const s: SerializedState = {
+    activeFlow: state.activeFlow,
     leafCount: state.leafCount,
     leaves: state.leaves,
     masterSeedHex: state.masterSeed ? toHex(state.masterSeed) : null,
@@ -111,6 +161,7 @@ function serialize(state: WizardState): string {
     deployedAddresses: state.deployedAddresses,
     lastTxHash: state.lastTxHash,
     pimlicoApiKey: state.pimlicoApiKey,
+    pqc4337: state.pqc4337,
   }
   return JSON.stringify(s)
 }
@@ -119,6 +170,7 @@ function deserialize(json: string): WizardState | null {
   try {
     const s: SerializedState = JSON.parse(json)
     return {
+      activeFlow: s.activeFlow ?? 'hca',
       leafCount: s.leafCount,
       leaves: s.leaves,
       masterSeed: s.masterSeedHex ? fromHex(s.masterSeedHex) : null,
@@ -131,6 +183,15 @@ function deserialize(json: string): WizardState | null {
       deployedAddresses: s.deployedAddresses,
       lastTxHash: s.lastTxHash,
       pimlicoApiKey: s.pimlicoApiKey ?? '',
+      pqc4337: {
+        scheme: s.pqc4337?.scheme ?? 'falcon-eth',
+        keypair: s.pqc4337?.keypair ?? null,
+        registration: s.pqc4337?.registration ?? null,
+        deployment: s.pqc4337?.deployment ?? null,
+        lastTxHash: s.pqc4337?.lastTxHash ?? null,
+        lastUserOpHash: s.pqc4337?.lastUserOpHash ?? null,
+        pimlicoApiKey: s.pqc4337?.pimlicoApiKey ?? '',
+      },
     }
   } catch {
     return null
@@ -141,7 +202,18 @@ function deserialize(json: string): WizardState | null {
 // Initial state
 // ---------------------------------------------------------------------------
 
+const initialPqc4337State: Pqc4337State = {
+  scheme: 'falcon-eth',
+  keypair: null,
+  registration: null,
+  deployment: null,
+  lastTxHash: null,
+  lastUserOpHash: null,
+  pimlicoApiKey: '',
+}
+
 const initialState: WizardState = {
+  activeFlow: 'hca',
   leafCount: 16,
   leaves: [],
   masterSeed: null,
@@ -154,6 +226,7 @@ const initialState: WizardState = {
   deployedAddresses: null,
   lastTxHash: null,
   pimlicoApiKey: '',
+  pqc4337: initialPqc4337State,
 }
 
 // ---------------------------------------------------------------------------
@@ -166,7 +239,6 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = React.useState<WizardState>(initialState)
   const [hydrated, setHydrated] = React.useState(false)
 
-  // Restore from localStorage on mount
   React.useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
@@ -176,7 +248,6 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
     setHydrated(true)
   }, [])
 
-  // Persist to localStorage on every state change (after hydration)
   React.useEffect(() => {
     if (hydrated) {
       localStorage.setItem(STORAGE_KEY, serialize(state))
@@ -184,6 +255,10 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
   }, [state, hydrated])
 
   const actions: WizardActions = React.useMemo(() => ({
+    setActiveFlow(activeFlow) {
+      setState(prev => ({ ...prev, activeFlow }))
+    },
+
     setLeafConfig(leafCount, leaves) {
       setState(prev => ({ ...prev, leafCount, leaves }))
     },
@@ -219,6 +294,94 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
         leaves: prev.leaves.map(l =>
           l.index === leafIndex ? { ...l, used: true } : l
         ),
+      }))
+    },
+
+    setPqc4337Scheme(scheme) {
+      setState(prev => ({
+        ...prev,
+        pqc4337: {
+          ...prev.pqc4337,
+          scheme,
+          keypair: null,
+          registration: null,
+          deployment: null,
+          lastTxHash: null,
+          lastUserOpHash: null,
+        },
+      }))
+    },
+
+    setPqc4337Keypair(keypair) {
+      setState(prev => ({
+        ...prev,
+        pqc4337: {
+          ...prev.pqc4337,
+          keypair,
+          registration: null,
+          deployment: null,
+          lastTxHash: null,
+          lastUserOpHash: null,
+        },
+      }))
+    },
+
+    setPqc4337Registration(registration) {
+      setState(prev => ({
+        ...prev,
+        pqc4337: {
+          ...prev.pqc4337,
+          registration,
+          deployment: null,
+          lastTxHash: registration.txHash,
+        },
+      }))
+    },
+
+    setPqc4337Deployment(deployment) {
+      setState(prev => ({
+        ...prev,
+        pqc4337: {
+          ...prev.pqc4337,
+          deployment,
+        },
+      }))
+    },
+
+    setPqc4337LastTxHash(hash) {
+      setState(prev => ({
+        ...prev,
+        pqc4337: {
+          ...prev.pqc4337,
+          lastTxHash: hash,
+        },
+      }))
+    },
+
+    setPqc4337LastUserOpHash(hash) {
+      setState(prev => ({
+        ...prev,
+        pqc4337: {
+          ...prev.pqc4337,
+          lastUserOpHash: hash,
+        },
+      }))
+    },
+
+    setPqc4337PimlicoApiKey(key) {
+      setState(prev => ({
+        ...prev,
+        pqc4337: {
+          ...prev.pqc4337,
+          pimlicoApiKey: key,
+        },
+      }))
+    },
+
+    resetPqc4337() {
+      setState(prev => ({
+        ...prev,
+        pqc4337: initialPqc4337State,
       }))
     },
 

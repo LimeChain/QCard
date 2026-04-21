@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 export type StepState = "completed" | "current" | "pending"
 export type StepDefinition = { title: string; id: string }
 
-export const STEPS: StepDefinition[] = [
+export const HCA_STEPS: StepDefinition[] = [
   { id: "configure", title: "Configure Account" },
   { id: "keys", title: "Generate Keys" },
   { id: "deploy", title: "Deploy" },
@@ -13,15 +13,27 @@ export const STEPS: StepDefinition[] = [
   { id: "verify", title: "Verify" },
 ]
 
+export const PQC4337_STEPS: StepDefinition[] = [
+  { id: "configure", title: "Configure" },
+  { id: "keys", title: "Generate" },
+  { id: "deploy", title: "Deploy" },
+  { id: "fund", title: "Fund" },
+  { id: "sign", title: "Sign & Submit" },
+  { id: "verify", title: "Verify" },
+]
+
 export interface StepIndicatorProps {
   currentStepIndex: number
+  flowMode: "hca" | "pqc4337"
 }
 
-export function StepIndicator({ currentStepIndex }: StepIndicatorProps) {
+export function StepIndicator({ currentStepIndex, flowMode }: StepIndicatorProps) {
+  const steps = flowMode === "pqc4337" ? PQC4337_STEPS : HCA_STEPS
+
   return (
     <div className="w-full py-6">
       <div className="flex items-center justify-between w-full relative">
-        {STEPS.map((step, index) => {
+        {steps.map((step, index) => {
           let state: StepState = "pending"
           if (index < currentStepIndex) state = "completed"
           else if (index === currentStepIndex) state = "current"
@@ -60,7 +72,7 @@ export function StepIndicator({ currentStepIndex }: StepIndicatorProps) {
                 </span>
               </div>
 
-              {index < STEPS.length - 1 && (
+              {index < steps.length - 1 && (
                 <div className="flex-1 h-0.5 mx-2 bg-border relative z-0">
                   <div
                     className="absolute top-0 left-0 h-full bg-accent transition-all duration-300"

@@ -1,4 +1,5 @@
 forge-std/=lib/forge-std/src/
 ETHFALCON/=lib/ETHFALCON/src/
+ETHDILITHIUM/=lib/ETHDILITHIUM/src/
 InterfaceVerifier/=lib/ETHFALCON/lib/InterfaceVerifier/src/
 sstore2/=lib/sstore2/contracts/

@@ -16,6 +16,7 @@ function buildLeaves(leafCount: number): LeafConfig[] {
 export function ConfigureAccount({ onNext }: { onNext: () => void }) {
   const wizard = useWizard()
   const [leafCount, setLeafCount] = React.useState(wizard.leafCount)
+  const [pqcScheme, setPqcScheme] = React.useState(wizard.pqc4337.scheme)
 
   const leaves = React.useMemo(() => buildLeaves(leafCount), [leafCount])
 
@@ -31,6 +32,67 @@ export function ConfigureAccount({ onNext }: { onNext: () => void }) {
   }
 
   const rootHashPreview = wizard.authRoot ?? "0x" + "0".repeat(64)
+
+  if (wizard.activeFlow === "pqc4337") {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Configure PQC-4337 Scheme</CardTitle>
+            <CardDescription>Select the scheme for your dedicated PQC account</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <label className="flex items-start gap-3 p-3 border border-border rounded-lg cursor-pointer hover:border-accent/60">
+                <input
+                  type="radio"
+                  name="pqcScheme"
+                  value="falcon-eth"
+                  checked={pqcScheme === "falcon-eth"}
+                  onChange={() => setPqcScheme("falcon-eth")}
+                  className="accent-accent mt-1"
+                />
+                <div>
+                  <p className="text-sm font-medium">Falcon-ETH</p>
+                  <p className="text-xs text-muted mt-1">Falcon-512 ETH-variant (Keccak Hash-to-Point), with ZKNOX setKey pointer registration.</p>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 p-3 border border-border rounded-lg cursor-pointer hover:border-accent/60">
+                <input
+                  type="radio"
+                  name="pqcScheme"
+                  value="mldsa-eth"
+                  checked={pqcScheme === "mldsa-eth"}
+                  onChange={() => setPqcScheme("mldsa-eth")}
+                  className="accent-accent mt-1"
+                />
+                <div>
+                  <p className="text-sm font-medium">ML-DSA-ETH</p>
+                  <p className="text-xs text-muted mt-1">ML-DSA-44 ETH-variant (Keccak-PRG), browser-side keygen/signing and on-chain ETHDILITHIUM verification.</p>
+                </div>
+              </label>
+            </div>
+
+            <div className="pt-2">
+              <Badge variant="outline">Selected: {pqcScheme}</Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button
+            size="lg"
+            onClick={() => {
+              wizard.setPqc4337Scheme(pqcScheme)
+              onNext()
+            }}
+          >
+            Next: Generate Keys
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

@@ -9,6 +9,7 @@ import { useWizard } from "@/lib/store"
 import { useAccount, usePublicClient } from "wagmi"
 import { getWalletClient } from "wagmi/actions"
 import { config } from "@/lib/wagmi"
+import { PqcSignSubmit } from "./PqcSignSubmit"
 import { encodeFunctionData, encodeAbiParameters, parseAbiParameters, parseEther, toHex as viemToHex } from "viem"
 import { signMessage as lamportSign, generateLeafKeypair, buildMerkleProof } from "@/lib/crypto"
 import { buildHCAMerkleProof } from "@/lib/crypto/hca-keygen"
@@ -62,6 +63,10 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
   const wizard = useWizard()
   const { address: walletAddress } = useAccount()
   const publicClient = usePublicClient()
+
+  if (wizard.activeFlow === "pqc4337") {
+    return <PqcSignSubmit onNext={onNext} onBack={onBack} />
+  }
 
   const [selectedLeafIndex, setSelectedLeafIndex] = React.useState<number | null>(null)
   const [toAddress, setToAddress] = React.useState("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045")
@@ -370,10 +375,11 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
           }
 
           const walletClient = await getWalletClient(config, { chainId: 11155111 })
-          const ecdsaSig = await walletClient.request({
-            method: 'eth_sign',
-            params: [walletAddress, bytesToHex(msgHash)],
-          }) as `0x${string}`
+          // personal_sign (EIP-191) — universally supported. The ECDSAVerifier
+          // applies the same "\x19Ethereum Signed Message:\n32" prefix before ecrecover.
+          const ecdsaSig = await walletClient.signMessage({
+            message: { raw: bytesToHex(msgHash) as `0x${string}` },
+          })
 
           if (!wizard.leafHashes) {
             throw new Error('Leaf hashes missing from wizard state — please regenerate keys.')
@@ -557,9 +563,13 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
 
         setSubmitStatus('Waiting for on-chain confirmation...')
         const receipt = await getUserOperationReceipt(opHash, pimlicoKey, 11155111)
-        if (receipt?.transactionHash) {
-          wizard.setLastTxHash(receipt.transactionHash)
+        if (!receipt?.transactionHash) {
+          throw new Error('Bundler accepted the UserOperation, but no on-chain receipt arrived before the polling timeout.')
         }
+        if (!receipt.success) {
+          throw new Error(`UserOperation reached chain but execution failed: ${receipt.transactionHash}`)
+        }
+        wizard.setLastTxHash(receipt.transactionHash)
       } else {
         setSubmitStatus('Requesting wallet signature...')
         const walletClient = await getWalletClient(config, { chainId: 11155111 })

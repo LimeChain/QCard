@@ -19,11 +19,25 @@ export interface UserOperationV06 {
   signature: `0x${string}`
 }
 
+export interface UserOperationV07 {
+  sender: `0x${string}`
+  nonce: `0x${string}`
+  initCode: `0x${string}`
+  callData: `0x${string}`
+  accountGasLimits: `0x${string}`
+  preVerificationGas: `0x${string}`
+  gasFees: `0x${string}`
+  paymasterAndData: `0x${string}`
+  signature: `0x${string}`
+}
+
 export interface UserOpReceipt {
   userOpHash: string
   transactionHash: string
   success: boolean
 }
+
+const ENTRY_POINT_V06 = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
 
 function bundlerUrl(apiKey: string, chainId: number): string {
   return `https://api.pimlico.io/v2/${chainId}/rpc?apikey=${apiKey}`
@@ -63,10 +77,23 @@ export async function estimateUserOpGas(
   verificationGasLimit: `0x${string}`
   preVerificationGas: `0x${string}`
 }> {
+  return estimateUserOpGasForEntryPoint(userOp, apiKey, chainId, ENTRY_POINT_V06)
+}
+
+export async function estimateUserOpGasForEntryPoint(
+  userOp: UserOperationV06 | UserOperationV07,
+  apiKey: string,
+  chainId: number,
+  entryPoint: `0x${string}`,
+): Promise<{
+  callGasLimit: `0x${string}`
+  verificationGasLimit: `0x${string}`
+  preVerificationGas: `0x${string}`
+}> {
   const url = bundlerUrl(apiKey, chainId)
   const result = await rpc(url, 'eth_estimateUserOperationGas', [
     userOp,
-    '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
+    entryPoint,
   ]) as Record<string, string>
 
   return {
@@ -104,12 +131,39 @@ export async function sendUserOperation(
   apiKey: string,
   chainId: number,
 ): Promise<string> {
+  return sendUserOperationForEntryPoint(userOp, apiKey, chainId, ENTRY_POINT_V06)
+}
+
+export async function sendUserOperationForEntryPoint(
+  userOp: UserOperationV06 | UserOperationV07,
+  apiKey: string,
+  chainId: number,
+  entryPoint: `0x${string}`,
+): Promise<string> {
   const url = bundlerUrl(apiKey, chainId)
   const hash = await rpc(url, 'eth_sendUserOperation', [
     userOp,
-    '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
+    entryPoint,
   ]) as string
   return hash
+}
+
+export async function estimateUserOpGasV07(
+  userOp: UserOperationV07,
+  apiKey: string,
+  chainId: number,
+  entryPoint: `0x${string}`,
+) {
+  return estimateUserOpGasForEntryPoint(userOp, apiKey, chainId, entryPoint)
+}
+
+export async function sendUserOperationV07(
+  userOp: UserOperationV07,
+  apiKey: string,
+  chainId: number,
+  entryPoint: `0x${string}`,
+): Promise<string> {
+  return sendUserOperationForEntryPoint(userOp, apiKey, chainId, entryPoint)
 }
 
 /**

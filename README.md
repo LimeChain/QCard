@@ -60,7 +60,14 @@ export SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_KEY
 ./scripts/deploy.sh
 ```
 
-By default, `./scripts/deploy.sh` deploys a fresh ETHFALCON engine, self-tests it on-chain with a known-good vector, then deploys `FalconVerifier` and the HCA factory against that engine. If you already trust an engine deployment, set `FALCON_ENGINE=0x...` before running the script. If you want to skip Falcon entirely, set `FALCON_ENGINE=0x0000000000000000000000000000000000000000`.
+By default, `./scripts/deploy.sh` deploys the full local stack in one run:
+
+- a fresh ETHFALCON engine for the HCA Falcon wrapper unless `FALCON_ENGINE` is provided
+- the HCA contracts (`LamportVerifier`, `ECDSAVerifier`, optional `FalconVerifier`, `HCAFactory`)
+- the PQC-4337 contracts (`ZKNOX_ethfalcon`, `ZKNOX_ethdilithium`, `PqcAccountFactory`)
+- automatic `.env.local` wiring for all HCA and PQC frontend addresses
+
+If you already trust an engine deployment, set `FALCON_ENGINE=0x...` before running the script. If you want to skip Falcon entirely on the HCA path, set `FALCON_ENGINE=0x0000000000000000000000000000000000000000`.
 
 Or manually:
 
@@ -73,7 +80,11 @@ forge script script/DeployHCA.s.sol \
   --private-key $PRIVATE_KEY
 ```
 
-After deploying, run `./scripts/wire.sh <factory> <lamport> <ecdsa> <falcon> [falcon_engine]` to update `.env.local`, or fill it in manually.
+After deploying, `.env.local` is updated automatically. For a manual wiring flow, run:
+
+```bash
+./scripts/wire.sh <hca_factory> <lamport> <ecdsa> <falcon> <pqc_factory> <falcon_eth_verifier> <mldsa_eth_verifier> <entrypoint_v07> [falcon_engine]
+```
 
 Verify deployment: `./scripts/verify.sh`
 
