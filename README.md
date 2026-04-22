@@ -21,7 +21,12 @@ cd pqc-eth-poc
 npm install
 
 cp .env.example .env.local
-# Fill in contract addresses (deploy your own or get from your team) and Pimlico API key
+# Set only deploy credentials in .env.local:
+# PRIVATE_KEY=0x...
+# SEPOLIA_RPC_URL=https://...
+#
+# Then deploy; script auto-writes all NEXT_PUBLIC_* addresses to .env.local
+./scripts/deploy.sh
 
 # Optional: needed only for HCA Falcon leaves (not needed for PQC-4337 flow)
 ./scripts/setup-falcon.sh
@@ -35,8 +40,12 @@ npm run dev
 
 ## Environment Variables
 
+If you use `./scripts/deploy.sh`, you only need to set `PRIVATE_KEY` and `SEPOLIA_RPC_URL` manually. The script auto-wires frontend `NEXT_PUBLIC_*` contract addresses in `.env.local`.
+
 | Variable | Required | Description |
 |----------|----------|-------------|
+| `PRIVATE_KEY` | Yes for deploys | Deployer private key used by `./scripts/deploy.sh` |
+| `SEPOLIA_RPC_URL` | Yes for deploys | Sepolia RPC endpoint used by `./scripts/deploy.sh` |
 | `NEXT_PUBLIC_ENTRYPOINT_V07` | Yes for PQC-4337 | EntryPoint v0.7 address used by PQC-4337 user-ops |
 | `NEXT_PUBLIC_HCA_FACTORY` | Yes | HCAFactory contract address |
 | `NEXT_PUBLIC_LAMPORT_VERIFIER` | Yes | LamportVerifier contract address |

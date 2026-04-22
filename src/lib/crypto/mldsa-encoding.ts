@@ -2,7 +2,7 @@ import { shake128, shake256 } from "@noble/hashes/sha3.js";
 import { genCrystals } from "@noble/post-quantum/_crystals.js";
 import { bytesToHex, encodeAbiParameters, type Hex } from "viem";
 
-import { createKeccakPrg } from "./keccak-prg.js";
+import { createKeccakPrg } from "./keccak-prg";
 
 // ML-DSA-44 (NIST FIPS 204) parameters; matches ETHDILITHIUM submodule
 // constants k=4, l=4 at ETHDILITHIUM/src/ZKNOX_dilithium_utils.sol:44-45.

@@ -24,8 +24,8 @@
 import { splitCoder, vecCoder } from "@noble/post-quantum/utils.js";
 import { genCrystals } from "@noble/post-quantum/_crystals.js";
 
-import { SignerInputError } from "./errors.js";
-import type { XofFactory, XofReader } from "./mldsa-encoding.js";
+import { SignerInputError } from "./errors";
+import type { XofFactory, XofReader } from "./mldsa-encoding";
 
 // === ML-DSA-44 parameter constants (FIPS 204 Table 1/2; AC-3-8) ==========
 
