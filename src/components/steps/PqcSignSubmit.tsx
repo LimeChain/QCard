@@ -46,6 +46,7 @@ export function PqcSignSubmit({ onNext, onBack }: { onNext: () => void, onBack: 
 
   const envPimlicoKey = process.env.NEXT_PUBLIC_PIMLICO_API_KEY ?? ""
   const [pimlicoKey] = React.useState(wizard.pqc4337.pimlicoApiKey || envPimlicoKey)
+  const hasBundler = pimlicoKey.length > 0
 
   const clearError = () => {
     setError(null)
@@ -271,6 +272,33 @@ export function PqcSignSubmit({ onNext, onBack }: { onNext: () => void, onBack: 
 
           <div className="space-y-4 pt-4 border-t border-border">
             <h4 className="text-sm font-medium">3. Submit</h4>
+            {hasBundler ? (
+              <div className="p-3 border border-green-600/40 bg-green-900/10 rounded-lg flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />
+                <div className="text-xs">
+                  <p className="font-medium text-green-400">ERC-4337 Bundler Mode</p>
+                  <p className="text-muted mt-0.5">
+                    Pimlico submits your UserOperation to EntryPoint, which verifies the PQC signature on-chain.
+                  </p>
+                  <p className="text-muted mt-1">
+                    <strong>Who pays gas:</strong> your smart account pays from its ETH balance (no paymaster in this flow). Pimlico relays but does not sponsor gas.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 border border-yellow-600/40 bg-yellow-900/10 rounded-lg flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-yellow-500 mt-1.5 shrink-0" />
+                <div className="text-xs">
+                  <p className="font-medium text-yellow-400">Direct Wallet Mode</p>
+                  <p className="text-muted mt-0.5">
+                    Without Pimlico key, the app calls <code className="text-[10px] bg-[#161b22] px-1 rounded">execute()</code> directly from your wallet.
+                  </p>
+                  <p className="text-muted mt-1">
+                    <strong>Who pays gas:</strong> your connected wallet (MetaMask EOA) pays gas directly for this transaction.
+                  </p>
+                </div>
+              </div>
+            )}
             {error && (
               <Alert variant="destructive" className="border-red-500/40 bg-red-900/20 text-red-100">
                 <AlertTitle className="text-red-300">{error.title}</AlertTitle>
@@ -299,7 +327,7 @@ export function PqcSignSubmit({ onNext, onBack }: { onNext: () => void, onBack: 
             )}
             <Button className="w-full" size="lg" onClick={handleSubmit} disabled={!signatureHex || isSubmitting || submitted}>
               {isSubmitting ? <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Server className="w-4 h-4 mr-2" />}
-              {isSubmitting ? "Submitting..." : submitted ? "Submitted" : "Submit"}
+              {isSubmitting ? "Submitting..." : submitted ? "Submitted" : hasBundler ? "Submit via Bundler (PQC verified)" : "Direct Call (no bundler)"}
             </Button>
             {isSubmitting && submitStatus && (
               <div className="flex items-center gap-3 p-3 border border-border rounded-lg bg-[#161b22]">

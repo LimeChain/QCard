@@ -729,6 +729,9 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                    <p className="text-muted mt-0.5">
                      UserOperation → Pimlico bundler → EntryPoint → <code className="text-[10px] bg-[#161b22] px-1 rounded">validateUserOp()</code> → PQC signature verified on-chain → <code className="text-[10px] bg-[#161b22] px-1 rounded">execute()</code>
                    </p>
+                   <p className="text-muted mt-1">
+                     <strong>Who pays gas:</strong> your smart account pays from its ETH balance (no paymaster in this flow). Pimlico relays the UserOperation but does not sponsor gas.
+                   </p>
                  </div>
                </div>
              ) : (
@@ -738,6 +741,9 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                    <p className="font-medium text-yellow-400">Direct Wallet Mode (no PQC verification)</p>
                    <p className="text-muted mt-0.5">
                      MetaMask signs a regular transaction calling <code className="text-[10px] bg-[#161b22] px-1 rounded">execute()</code> directly. The Lamport signature above is generated but <strong>not verified on-chain</strong>. Set <code className="text-[10px] bg-[#161b22] px-1 rounded">NEXT_PUBLIC_PIMLICO_API_KEY</code> in <code className="text-[10px] bg-[#161b22] px-1 rounded">.env.local</code> for the real ERC-4337 flow.
+                   </p>
+                   <p className="text-muted mt-1">
+                     <strong>Who pays gas:</strong> your connected wallet (MetaMask EOA) pays gas directly for this transaction.
                    </p>
                  </div>
                </div>
