@@ -52,7 +52,13 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
   const wrongChain = isConnected && chainId !== sepolia.id
 
   const handleConnect = () => {
-    connect({ connector: connectors[0] })
+    const preferredConnector =
+      connectors.find((c) => c.id.toLowerCase().includes("meta")) ??
+      connectors.find((c) => c.id.toLowerCase().includes("injected")) ??
+      connectors[0]
+    if (preferredConnector) {
+      connect({ connector: preferredConnector })
+    }
   }
 
   const handleDeploy = async () => {
@@ -63,7 +69,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
 
     if (isPqcFlow) {
       if (!wizard.pqc4337.keypair) {
-        setDeployError("No PQC keypair found. Go back to Step 2 and generate keys first.")
+        setDeployError("No PQC keypair found. Go back to Step 2 and generate keys first. (Keys should persist across refresh until reset.)")
         return
       }
       if (!pqcFactoryConfigured) {
@@ -77,7 +83,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
         const walletClient = await getWalletClient(config, { chainId: 11155111 })
 
         const salt = BigInt(Date.now())
-        setDeployStatus("Registering key + deploying account atomically...")
+        setDeployStatus("Confirm deployment in your wallet (MetaMask)...")
         const createHash = wizard.pqc4337.scheme === "falcon-eth"
           ? await walletClient.writeContract({
             address: ADDRESSES.pqc4337Factory,
@@ -92,6 +98,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
             args: [address, wizard.pqc4337.keypair.encodedPublicKey, salt],
           })
 
+        setDeployStatus("Transaction sent. Waiting for confirmation...")
         const createReceipt = await publicClient.waitForTransactionReceipt({
           hash: createHash,
           timeout: 120_000,
@@ -183,6 +190,7 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
         timeout: 120_000,
         pollingInterval: 3_000,
       })
+      wizard.setLastTxHash(hash)
 
       setDeployStatus('Reading deployed account address...')
       const accountAddr = await publicClient.readContract({
@@ -216,10 +224,16 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
   const basescanUrl = accountAddr
     ? `https://sepolia.etherscan.io/address/${accountAddr}`
     : '#'
+  const hcaTxUrl = wizard.lastTxHash
+    ? `https://sepolia.etherscan.io/tx/${wizard.lastTxHash}`
+    : "#"
 
   const pqcAccountAddr = wizard.pqc4337.deployment?.accountAddress
   const pqcBasescanUrl = pqcAccountAddr
     ? `https://sepolia.etherscan.io/address/${pqcAccountAddr}`
+    : "#"
+  const pqcTxUrl = wizard.pqc4337.lastTxHash
+    ? `https://sepolia.etherscan.io/tx/${wizard.pqc4337.lastTxHash}`
     : "#"
 
   if (isPqcFlow) {
@@ -329,8 +343,13 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
                   </div>
                 </div>
                 <div className="flex gap-2 text-xs mt-2 justify-end">
+                  {wizard.pqc4337.lastTxHash && (
+                    <a href={pqcTxUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-muted hover:text-accent transition-colors">
+                      View deploy tx <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
                   <a href={pqcBasescanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-muted hover:text-accent transition-colors">
-                    View on Etherscan <ExternalLink className="w-3 h-3" />
+                    View account address <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
               </div>
@@ -466,8 +485,13 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
                  </div>
               </div>
               <div className="flex gap-2 text-xs mt-2 justify-end">
+                {wizard.lastTxHash && (
+                  <a href={hcaTxUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-muted hover:text-accent transition-colors">
+                    View deploy tx <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
                 <a href={basescanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-muted hover:text-accent transition-colors">
-                  View on Etherscan <ExternalLink className="w-3 h-3" />
+                  View account address <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
             </div>

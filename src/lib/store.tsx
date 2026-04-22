@@ -303,11 +303,13 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
         pqc4337: {
           ...prev.pqc4337,
           scheme,
-          keypair: null,
-          registration: null,
-          deployment: null,
-          lastTxHash: null,
-          lastUserOpHash: null,
+          // Preserve generated keys/deployment when user re-enters Configure
+          // and keeps the same scheme. Reset only when scheme actually changes.
+          keypair: prev.pqc4337.scheme === scheme ? prev.pqc4337.keypair : null,
+          registration: prev.pqc4337.scheme === scheme ? prev.pqc4337.registration : null,
+          deployment: prev.pqc4337.scheme === scheme ? prev.pqc4337.deployment : null,
+          lastTxHash: prev.pqc4337.scheme === scheme ? prev.pqc4337.lastTxHash : null,
+          lastUserOpHash: prev.pqc4337.scheme === scheme ? prev.pqc4337.lastUserOpHash : null,
         },
       }))
     },

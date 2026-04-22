@@ -170,6 +170,10 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
             <CardDescription>Generate {wizard.pqc4337.scheme} key material and verifier payload</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="text-xs text-muted border border-border rounded-lg bg-[#161b22] p-3">
+              HCA uses an encryption password because it exports an encrypted master seed file.
+              PQC-4337 keygen is browser-only and keeps the keypair in local storage until you click reset.
+            </div>
             {!complete && (
               <div className="space-y-4">
                 {error && (
@@ -208,7 +212,7 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
                   </div>
                 </div>
                 <p className="text-xs text-muted">
-                  Secret key is stored locally in browser state for this session flow and used only for client-side signing.
+                  Secret key is stored locally in browser state/local storage for this flow and used only for client-side signing.
                 </p>
               </div>
             )}
