@@ -7,3 +7,6 @@
 [submodule "contracts/lib/sstore2"]
 	path = contracts/lib/sstore2
 	url = https://github.com/0xsequence/sstore2
+[submodule "contracts/lib/ETHDILITHIUM"]
+	path = contracts/lib/ETHDILITHIUM
+	url = https://github.com/ZKNoxHQ/ETHDILITHIUM
