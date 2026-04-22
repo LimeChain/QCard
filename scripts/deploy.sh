@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy HCA contracts to Sepolia and write addresses to .env.local
+# Deploy HCA and PQC-4337 contracts to Sepolia and write addresses to .env.local
 # Usage: ./scripts/deploy.sh
 # Requires: PRIVATE_KEY and SEPOLIA_RPC_URL set in environment or .env.local
 # Optional: FALCON_ENGINE — address of a pre-deployed ZKNOX_ethfalcon on-chain.
@@ -29,7 +29,7 @@ fi
 
 SENDER=$($CAST wallet address --private-key "$PRIVATE_KEY")
 echo "Deployer:     $SENDER"
-echo "RPC:          $SEPOLIA_RPC_URL"
+echo "RPC:           $SEPOLIA_RPC_URL"
 echo "Falcon engine: ${FALCON_ENGINE:-AUTO-DEPLOY}"
 echo ""
 
@@ -71,22 +71,22 @@ if [ -n "${FALCON_ENGINE:-}" ] && [ "${FALCON_ENGINE}" != "0x0000000000000000000
   fi
 fi
 
-# Deploy (forge script with --via-ir, required by the DebugValidation / BedrockFalcon tests)
+# Deploy HCA stack.
 cd "$CONTRACTS_DIR"
-OUTPUT=$($FORGE script script/DeployHCA.s.sol \
+HCA_OUTPUT=$($FORGE script script/DeployHCA.s.sol \
   --rpc-url "$SEPOLIA_RPC_URL" \
   --broadcast \
   --sender "$SENDER" \
   --private-key "$PRIVATE_KEY" \
   --via-ir 2>&1)
 
-echo "$OUTPUT"
+echo "$HCA_OUTPUT"
 
-# Parse addresses from output
-LAMPORT=$(echo "$OUTPUT" | grep "LamportVerifier:" | awk '{print $2}')
-ECDSA=$(echo "$OUTPUT" | grep "ECDSAVerifier:" | awk '{print $2}')
-FACTORY=$(echo "$OUTPUT" | grep "HCAFactory:" | awk '{print $2}')
-FALCON=$(echo "$OUTPUT" | grep "FalconVerifier:" | awk '{print $2}')
+# Parse HCA addresses from output
+LAMPORT=$(echo "$HCA_OUTPUT" | grep "LamportVerifier:" | awk '{print $2}')
+ECDSA=$(echo "$HCA_OUTPUT" | grep "ECDSAVerifier:" | awk '{print $2}')
+FACTORY=$(echo "$HCA_OUTPUT" | grep "HCAFactory:" | awk '{print $2}')
+FALCON=$(echo "$HCA_OUTPUT" | grep "FalconVerifier:" | awk '{print $2}')
 
 # Handle skipped Falcon
 if echo "$FALCON" | grep -q "SKIPPED"; then
@@ -103,11 +103,67 @@ if [ "$FALCON" != "0x0000000000000000000000000000000000000000" ]; then
 fi
 
 echo ""
+echo "Deploying PQC-4337 stack..."
+PQC_OUTPUT=$($FORGE script script/DeployPqc4337.s.sol \
+  --rpc-url "$SEPOLIA_RPC_URL" \
+  --broadcast \
+  --sender "$SENDER" \
+  --private-key "$PRIVATE_KEY" \
+  --via-ir 2>&1)
+
+echo "$PQC_OUTPUT"
+
+ENTRYPOINT_V07=$(echo "$PQC_OUTPUT" | grep "EntryPoint:" | awk '{print $2}')
+PQC4337_FACTORY=$(echo "$PQC_OUTPUT" | grep "PqcAccountFactory:" | awk '{print $2}')
+FALCON_ETH_VERIFIER=$(echo "$PQC_OUTPUT" | grep "FalconEthVerifier:" | awk '{print $2}')
+MLDSA_ETH_VERIFIER=$(echo "$PQC_OUTPUT" | grep "MlDsaEthVerifier:" | awk '{print $2}')
+
+for DEPLOYED_ADDRESS in \
+  "$FACTORY" \
+  "$LAMPORT" \
+  "$ECDSA" \
+  "$PQC4337_FACTORY" \
+  "$FALCON_ETH_VERIFIER" \
+  "$MLDSA_ETH_VERIFIER" \
+  "$ENTRYPOINT_V07"
+do
+  if [ -z "$DEPLOYED_ADDRESS" ]; then
+    echo "ERROR: Failed to parse one or more contract addresses from forge output."
+    exit 1
+  fi
+done
+
+for CONTRACT_ADDRESS in \
+  "$FACTORY" \
+  "$LAMPORT" \
+  "$ECDSA" \
+  "$PQC4337_FACTORY" \
+  "$FALCON_ETH_VERIFIER" \
+  "$MLDSA_ETH_VERIFIER" \
+  "$ENTRYPOINT_V07"
+do
+  CODE=$($CAST code "$CONTRACT_ADDRESS" --rpc-url "$SEPOLIA_RPC_URL")
+  if [ "$CODE" = "0x" ] || [ -z "$CODE" ]; then
+    echo "ERROR: No contract code found at $CONTRACT_ADDRESS after deployment."
+    exit 1
+  fi
+done
+
+echo ""
 echo "=== Writing to $ENV_FILE ==="
 
 # Write/update .env.local
 cd "$PROJECT_DIR"
-./scripts/wire.sh "$FACTORY" "$LAMPORT" "$ECDSA" "$FALCON" "${FALCON_ENGINE:-}"
+./scripts/wire.sh \
+  "$FACTORY" \
+  "$LAMPORT" \
+  "$ECDSA" \
+  "$FALCON" \
+  "$PQC4337_FACTORY" \
+  "$FALCON_ETH_VERIFIER" \
+  "$MLDSA_ETH_VERIFIER" \
+  "$ENTRYPOINT_V07" \
+  "${FALCON_ENGINE:-}"
 
 echo ""
 echo "Done. Run 'npm run dev' to start the app."

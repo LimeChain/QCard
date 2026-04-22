@@ -6,6 +6,10 @@ import {ISchemeVerifier} from "./ISchemeVerifier.sol";
 /// @title ECDSAVerifier -- Hybrid/fallback ECDSA leaf verification
 /// @notice Allows HCA accounts to include ECDSA-secured leaves alongside PQC leaves.
 ///         sigData format: abi.encode(address expectedSigner, bytes ecdsaSig)
+///
+///         The frontend signs with `personal_sign` (EIP-191), which prefixes the hash as:
+///         keccak256("\x19Ethereum Signed Message:\n32" || msgHash)
+///         We apply the same prefix here before ecrecover.
 contract ECDSAVerifier is ISchemeVerifier {
     /// @inheritdoc ISchemeVerifier
     function verify(bytes32 msgHash, bytes calldata sigData) external pure override returns (bool) {
@@ -30,7 +34,9 @@ contract ECDSAVerifier is ISchemeVerifier {
             return false;
         }
 
-        address recovered = ecrecover(msgHash, v, r, s);
+        // personal_sign (EIP-191) prefixes the 32-byte hash before signing.
+        bytes32 ethSignedHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", msgHash));
+        address recovered = ecrecover(ethSignedHash, v, r, s);
         return recovered != address(0) && recovered == expectedSigner;
     }
 }

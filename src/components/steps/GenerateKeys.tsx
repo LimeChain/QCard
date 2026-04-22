@@ -7,6 +7,8 @@ import { useWizard, type FalconLeafKey } from "@/lib/store"
 import { useAccount } from "wagmi"
 import {
   generateMasterSeed,
+  generateFalconEthKeypair,
+  generateMlDsaEthKeypair,
   encryptSeed,
   downloadSeedFile,
 } from "@/lib/crypto"
@@ -29,13 +31,39 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
   const [progress, setProgress] = React.useState(0)
   const [progressLabel, setProgressLabel] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
+  const isPqcFlow = wizard.activeFlow === "pqc4337"
 
   // Derive "complete" from persisted wizard state — survives refresh
-  const complete = !!(wizard.masterSeed && wizard.authRoot)
+  const complete = isPqcFlow
+    ? !!wizard.pqc4337.keypair
+    : !!(wizard.masterSeed && wizard.authRoot)
 
   const leafCount = wizard.leafCount || 16
 
   const handleGenerate = async () => {
+    if (isPqcFlow) {
+      setError(null)
+      setIsGenerating(true)
+      setProgress(0)
+      setProgressLabel("Generating keypair in browser...")
+      try {
+        setProgress(35)
+        const keypair = wizard.pqc4337.scheme === "falcon-eth"
+          ? generateFalconEthKeypair()
+          : generateMlDsaEthKeypair()
+        setProgress(80)
+        setProgressLabel("Encoding verifier registration payload...")
+        wizard.setPqc4337Keypair(keypair)
+        setProgress(100)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "PQC key generation failed")
+      } finally {
+        setIsGenerating(false)
+        setProgressLabel("")
+      }
+      return
+    }
+
     if (!password) {
       setError("Please enter an encryption password.")
       return
@@ -124,6 +152,80 @@ export function GenerateKeys({ onNext, onBack }: { onNext: () => void, onBack: (
 
   const maskedSeed = wizard.masterSeed ? maskHex(toHex(wizard.masterSeed)) : '---'
   const authRoot = wizard.authRoot ?? '---'
+
+  if (isPqcFlow) {
+    const keypair = wizard.pqc4337.keypair
+    const publicKeyPreview = keypair?.publicKeyHex
+      ? `${keypair.publicKeyHex.slice(0, 18)}...${keypair.publicKeyHex.slice(-10)}`
+      : "---"
+    const payloadPreview = keypair?.encodedPublicKey
+      ? `${keypair.encodedPublicKey.slice(0, 18)}...${keypair.encodedPublicKey.slice(-10)}`
+      : "---"
+
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Generate PQC Keypair</CardTitle>
+            <CardDescription>Generate {wizard.pqc4337.scheme} key material and verifier payload</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-xs text-muted border border-border rounded-lg bg-[#161b22] p-3">
+              HCA uses an encryption password because it exports an encrypted master seed file.
+              PQC-4337 keygen is browser-only and keeps the keypair in local storage until you click reset.
+            </div>
+            {!complete && (
+              <div className="space-y-4">
+                {error && (
+                  <p className="text-sm text-red-400">{error}</p>
+                )}
+                <Button className="w-full" onClick={handleGenerate} disabled={isGenerating}>
+                  {isGenerating ? "Generating..." : "Generate Keypair"}
+                </Button>
+                {isGenerating && (
+                  <div className="space-y-1">
+                    <div className="w-full h-2 bg-card rounded-full overflow-hidden border border-border">
+                      <div className="h-full bg-accent transition-all duration-300" style={{ width: `${progress}%` }} />
+                    </div>
+                    {progressLabel && (
+                      <p className="text-xs text-muted text-center">{progressLabel}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {complete && keypair && (
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="grid gap-2 text-sm border border-border p-4 rounded-lg bg-[#161b22]">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted text-xs uppercase tracking-wider">Scheme</span>
+                    <span>{wizard.pqc4337.scheme}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted text-xs uppercase tracking-wider">Public Key</span>
+                    <span className="font-mono text-accent">{publicKeyPreview}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted text-xs uppercase tracking-wider">setKey Payload</span>
+                    <span className="font-mono text-muted">{payloadPreview}</span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted">
+                  Secret key is stored locally in browser state/local storage for this flow and used only for client-side signing.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-between">
+          <Button variant="ghost" onClick={onBack}>Back</Button>
+          <Button size="lg" disabled={!complete} onClick={onNext}>Next: Deploy</Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

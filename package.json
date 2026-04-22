@@ -8,6 +8,9 @@
     "start": "next start"
   },
   "dependencies": {
+    "@noble/curves": "~2.2.0",
+    "@noble/hashes": "~2.2.0",
+    "@noble/post-quantum": "git+ssh://git@github.com/LimeChain/noble-post-quantum-eth.git#falcon-eth-hashtopoint-injection",
     "@tanstack/react-query": "^5.96.2",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",

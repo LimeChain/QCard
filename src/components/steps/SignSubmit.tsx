@@ -4,11 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui
 import { Input } from "../ui/Input"
 import { CodeBlock } from "../ui/CodeBlock"
 import { Badge } from "../ui/Badge"
+import { Alert, AlertDescription, AlertTitle } from "../ui/Alert"
 import { ArrowRight, KeyRound, Server, ChevronDown, ChevronUp } from "lucide-react"
 import { useWizard } from "@/lib/store"
 import { useAccount, usePublicClient } from "wagmi"
 import { getWalletClient } from "wagmi/actions"
 import { config } from "@/lib/wagmi"
+import { PqcSignSubmit } from "./PqcSignSubmit"
 import { encodeFunctionData, encodeAbiParameters, parseAbiParameters, parseEther, toHex as viemToHex } from "viem"
 import { signMessage as lamportSign, generateLeafKeypair, buildMerkleProof } from "@/lib/crypto"
 import { buildHCAMerkleProof } from "@/lib/crypto/hca-keygen"
@@ -17,6 +19,7 @@ import { ADDRESSES } from "@/lib/contracts/addresses"
 import { hcaAccountAbi, entryPointAbi, lamportVerifierAbi, falconVerifierAbi } from "@/lib/contracts/abis"
 import { sendUserOperation, getUserOperationReceipt, getPimlicoGasPrice, estimateUserOpGas, type UserOperationV06 } from "@/lib/bundler/pimlico"
 import { getUserOpHash } from "@/lib/bundler/userop"
+import { fromFriendlyMessage, toFriendlyUiError, type FriendlyUiError } from "@/lib/friendly-error"
 
 function bytesToHex(bytes: Uint8Array): `0x${string}` {
   return ('0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`
@@ -76,11 +79,27 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
   const [submitted, setSubmitted] = React.useState(false)
   const [userOpHashResult, setUserOpHashResult] = React.useState("")
   const [showJson, setShowJson] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
+  const [error, setError] = React.useState<FriendlyUiError | null>(null)
+  const [showErrorDetails, setShowErrorDetails] = React.useState(false)
 
   // Read Pimlico key from env, allow override
   const envPimlicoKey = process.env.NEXT_PUBLIC_PIMLICO_API_KEY ?? ''
   const [pimlicoKey, setPimlicoKey] = React.useState(wizard.pimlicoApiKey || envPimlicoKey)
+
+  const clearError = () => {
+    setError(null)
+    setShowErrorDetails(false)
+  }
+
+  const setFriendlyMessage = (message: string) => {
+    setError(fromFriendlyMessage(message))
+    setShowErrorDetails(false)
+  }
+
+  const setFriendlyError = (err: unknown, fallbackMessage: string) => {
+    setError(toFriendlyUiError(err, { fallbackMessage }))
+    setShowErrorDetails(false)
+  }
 
   const leaves = wizard.leaves
   const accountAddr = wizard.deployedAddresses?.hcaAccount ?? ''
@@ -109,13 +128,13 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
     if (index === selectedLeafIndex) return
     setSelectedLeafIndex(index)
     clearSignedState()
-    setError(null)
+    clearError()
   }
 
   const handleSign = async () => {
     if (selectedLeafIndex === null || !wizard.masterSeed || !wizard.leafRoots) return
     const leafIndex = selectedLeafIndex
-    setError(null)
+    clearError()
     setIsSigning(true)
     setSignStatus('Building UserOperation...')
 
@@ -129,7 +148,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
 
       const leaf = leaves.find((l) => l.index === leafIndex)
       if (!leaf) {
-        setError(`Leaf ${leafIndex} not found.`)
+        setFriendlyMessage(`Leaf ${leafIndex} not found.`)
         setIsSigning(false)
         return
       }
@@ -370,10 +389,11 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
           }
 
           const walletClient = await getWalletClient(config, { chainId: 11155111 })
-          const ecdsaSig = await walletClient.request({
-            method: 'eth_sign',
-            params: [walletAddress, bytesToHex(msgHash)],
-          }) as `0x${string}`
+          // personal_sign (EIP-191) — universally supported. The ECDSAVerifier
+          // applies the same "\x19Ethereum Signed Message:\n32" prefix before ecrecover.
+          const ecdsaSig = await walletClient.signMessage({
+            message: { raw: bytesToHex(msgHash) as `0x${string}` },
+          })
 
           if (!wizard.leafHashes) {
             throw new Error('Leaf hashes missing from wizard state — please regenerate keys.')
@@ -451,7 +471,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         if (accountBalance < requiredPrefund) {
           const needEth = Number(requiredPrefund) / 1e18
           const haveEth = Number(accountBalance) / 1e18
-          setError(`Account balance too low. Have ${haveEth.toFixed(4)} ETH, need at least ${needEth.toFixed(4)} ETH (maxFee = ${(Number(maxFee) / 1e9).toFixed(2)} gwei). Go back to Fund and add more ETH.`)
+          setFriendlyMessage(`Account balance too low. Have ${haveEth.toFixed(4)} ETH, need at least ${needEth.toFixed(4)} ETH (maxFee = ${(Number(maxFee) / 1e9).toFixed(2)} gwei). Go back to Fund and add more ETH.`)
           setIsSigning(false)
           setSignStatus('')
           return
@@ -512,7 +532,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
         userOpHash: signedUserOp.userOpHash,
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Signing failed')
+      setFriendlyError(err, 'Could not sign this transaction request.')
     } finally {
       setIsSigning(false)
       setSignStatus('')
@@ -521,7 +541,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
 
   const handleSubmit = async () => {
     if (!signatureHex || !accountAddr || !builtUserOp) return
-    setError(null)
+    clearError()
     setIsSubmitting(true)
     setSubmitStatus('Checking account balance...')
 
@@ -538,7 +558,7 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       if (publicClient) {
         const balance = await publicClient.getBalance({ address: accountAddr as `0x${string}` })
         if (balance === BigInt(0)) {
-          setError(`Account ${accountAddr.slice(0, 10)}... has 0 ETH. Go back to Step 4 (Fund) and send ETH to the account first.`)
+          setFriendlyMessage(`Account ${accountAddr.slice(0, 10)}... has 0 ETH. Go back to Step 4 (Fund) and send ETH to the account first.`)
           setIsSubmitting(false)
           return
         }
@@ -557,14 +577,18 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
 
         setSubmitStatus('Waiting for on-chain confirmation...')
         const receipt = await getUserOperationReceipt(opHash, pimlicoKey, 11155111)
-        if (receipt?.transactionHash) {
-          wizard.setLastTxHash(receipt.transactionHash)
+        if (!receipt?.transactionHash) {
+          throw new Error('Bundler accepted the UserOperation, but no on-chain receipt arrived before the polling timeout.')
         }
+        if (!receipt.success) {
+          throw new Error(`UserOperation reached chain but execution failed: ${receipt.transactionHash}`)
+        }
+        wizard.setLastTxHash(receipt.transactionHash)
       } else {
         setSubmitStatus('Requesting wallet signature...')
         const walletClient = await getWalletClient(config, { chainId: 11155111 })
         if (!publicClient) {
-          setError('Public client not ready.')
+          setFriendlyMessage('Public client not ready.')
           setIsSubmitting(false)
           return
         }
@@ -587,11 +611,15 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
       }
       setSubmitted(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Submission failed')
+      setFriendlyError(err, 'Could not submit the transaction.')
     } finally {
       setIsSubmitting(false)
       setSubmitStatus('')
     }
+  }
+
+  if (wizard.activeFlow === "pqc4337") {
+    return <PqcSignSubmit onNext={onNext} onBack={onBack} />
   }
 
   return (
@@ -701,6 +729,9 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                    <p className="text-muted mt-0.5">
                      UserOperation → Pimlico bundler → EntryPoint → <code className="text-[10px] bg-[#161b22] px-1 rounded">validateUserOp()</code> → PQC signature verified on-chain → <code className="text-[10px] bg-[#161b22] px-1 rounded">execute()</code>
                    </p>
+                   <p className="text-muted mt-1">
+                     <strong>Who pays gas:</strong> your smart account pays from its ETH balance (no paymaster in this flow). Pimlico relays the UserOperation but does not sponsor gas.
+                   </p>
                  </div>
                </div>
              ) : (
@@ -711,12 +742,38 @@ export function SignSubmit({ onNext, onBack }: { onNext: () => void, onBack: () 
                    <p className="text-muted mt-0.5">
                      MetaMask signs a regular transaction calling <code className="text-[10px] bg-[#161b22] px-1 rounded">execute()</code> directly. The Lamport signature above is generated but <strong>not verified on-chain</strong>. Set <code className="text-[10px] bg-[#161b22] px-1 rounded">NEXT_PUBLIC_PIMLICO_API_KEY</code> in <code className="text-[10px] bg-[#161b22] px-1 rounded">.env.local</code> for the real ERC-4337 flow.
                    </p>
+                   <p className="text-muted mt-1">
+                     <strong>Who pays gas:</strong> your connected wallet (MetaMask EOA) pays gas directly for this transaction.
+                   </p>
                  </div>
                </div>
              )}
 
              {error && (
-               <p className="text-sm text-red-400">{error}</p>
+               <Alert variant="destructive" className="border-red-500/40 bg-red-900/20 text-red-100">
+                 <AlertTitle className="text-red-300">{error.title}</AlertTitle>
+                 <AlertDescription className="space-y-2">
+                   <p className="text-sm text-red-100">{error.message}</p>
+                   {error.action && <p className="text-xs text-red-200/90">{error.action}</p>}
+                   {error.details && error.details !== error.message && (
+                     <div className="pt-1">
+                       <button
+                         type="button"
+                         onClick={() => setShowErrorDetails((prev) => !prev)}
+                         className="text-xs text-red-300 hover:text-red-200 underline inline-flex items-center gap-1"
+                       >
+                         {showErrorDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                         {showErrorDetails ? "Hide technical details" : "Show technical details"}
+                       </button>
+                       {showErrorDetails && (
+                         <p className="mt-2 text-[11px] font-mono whitespace-pre-wrap break-all text-red-100/80">
+                           {error.details}
+                         </p>
+                       )}
+                     </div>
+                   )}
+                 </AlertDescription>
+               </Alert>
              )}
 
              <Button

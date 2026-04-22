@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HCA Interactive Console",
+  title: "Quantum-Resistant Interactive Console",
   description: "Quantum-resistant Smart Account Deployment & Management",
 };
 
