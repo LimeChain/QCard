@@ -2,7 +2,8 @@ import * as React from "react"
 import { Button } from "../ui/Button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/Card"
 import { Input } from "../ui/Input"
-import { ArrowRight, KeyRound, Server } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "../ui/Alert"
+import { ArrowRight, KeyRound, Server, ChevronDown, ChevronUp } from "lucide-react"
 import { useWizard } from "@/lib/store"
 import { useAccount, usePublicClient } from "wagmi"
 import { getWalletClient } from "wagmi/actions"
@@ -13,6 +14,7 @@ import { entryPointV07Abi, pqcAccountAbi } from "@/lib/contracts/abis"
 import { sendUserOperationV07, getUserOperationReceipt, getPimlicoGasPrice, estimateUserOpGasV07, type UserOperationV07 } from "@/lib/bundler/pimlico"
 import { getUserOpHashV07, packAccountGasLimits, packGasFees } from "@/lib/bundler/userop-v07"
 import { signFalconEth, signMlDsaEth } from "@/lib/crypto"
+import { toFriendlyUiError, type FriendlyUiError } from "@/lib/friendly-error"
 
 const CALL_GAS = BigInt(500_000)
 const VERIFICATION_GAS = BigInt(3_000_000)
@@ -39,16 +41,27 @@ export function PqcSignSubmit({ onNext, onBack }: { onNext: () => void, onBack: 
   const [submitStatus, setSubmitStatus] = React.useState("")
   const [submitted, setSubmitted] = React.useState(false)
   const [userOpHashResult, setUserOpHashResult] = React.useState("")
-  const [error, setError] = React.useState<string | null>(null)
+  const [error, setError] = React.useState<FriendlyUiError | null>(null)
+  const [showErrorDetails, setShowErrorDetails] = React.useState(false)
 
   const envPimlicoKey = process.env.NEXT_PUBLIC_PIMLICO_API_KEY ?? ""
   const [pimlicoKey] = React.useState(wizard.pqc4337.pimlicoApiKey || envPimlicoKey)
+
+  const clearError = () => {
+    setError(null)
+    setShowErrorDetails(false)
+  }
+
+  const setFriendlyError = (err: unknown, fallbackMessage: string) => {
+    setError(toFriendlyUiError(err, { fallbackMessage }))
+    setShowErrorDetails(false)
+  }
 
   const accountAddr = wizard.pqc4337.deployment?.accountAddress ?? ""
   const keypair = wizard.pqc4337.keypair
 
   const handleSign = async () => {
-    setError(null)
+    clearError()
     setIsSigning(true)
     setSignStatus("Building UserOperation...")
     try {
@@ -156,7 +169,7 @@ export function PqcSignSubmit({ onNext, onBack }: { onNext: () => void, onBack: 
       setSignatureHex(signed.userOp.signature)
       wizard.setPqc4337LastUserOpHash(signed.userOpHash)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Signing failed")
+      setFriendlyError(err, "Could not build or sign the UserOperation.")
     } finally {
       setIsSigning(false)
       setSignStatus("")
@@ -165,7 +178,7 @@ export function PqcSignSubmit({ onNext, onBack }: { onNext: () => void, onBack: 
 
   const handleSubmit = async () => {
     if (!builtUserOp || !signatureHex || !accountAddr) return
-    setError(null)
+    clearError()
     setIsSubmitting(true)
     const useBundler = pimlicoKey.length > 0
     try {
@@ -212,7 +225,7 @@ export function PqcSignSubmit({ onNext, onBack }: { onNext: () => void, onBack: 
 
       setSubmitted(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Submission failed")
+      setFriendlyError(err, "Could not submit the transaction.")
     } finally {
       setIsSubmitting(false)
       setSubmitStatus("")
@@ -258,7 +271,32 @@ export function PqcSignSubmit({ onNext, onBack }: { onNext: () => void, onBack: 
 
           <div className="space-y-4 pt-4 border-t border-border">
             <h4 className="text-sm font-medium">3. Submit</h4>
-            {error && <p className="text-sm text-red-400">{error}</p>}
+            {error && (
+              <Alert variant="destructive" className="border-red-500/40 bg-red-900/20 text-red-100">
+                <AlertTitle className="text-red-300">{error.title}</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p className="text-sm text-red-100">{error.message}</p>
+                  {error.action && <p className="text-xs text-red-200/90">{error.action}</p>}
+                  {error.details && error.details !== error.message && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowErrorDetails((prev) => !prev)}
+                        className="text-xs text-red-300 hover:text-red-200 underline inline-flex items-center gap-1"
+                      >
+                        {showErrorDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                        {showErrorDetails ? "Hide technical details" : "Show technical details"}
+                      </button>
+                      {showErrorDetails && (
+                        <p className="mt-2 text-[11px] font-mono whitespace-pre-wrap break-all text-red-100/80">
+                          {error.details}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
             <Button className="w-full" size="lg" onClick={handleSubmit} disabled={!signatureHex || isSubmitting || submitted}>
               {isSubmitting ? <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Server className="w-4 h-4 mr-2" />}
               {isSubmitting ? "Submitting..." : submitted ? "Submitted" : "Submit"}

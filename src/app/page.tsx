@@ -52,7 +52,7 @@ function WizardContent() {
     setCurrentStep(0)
   }
 
-  const flowTitle = wizard.activeFlow === "pqc4337" ? "PQC-4337 Console" : "HCA Interactive Console"
+  const flowTitle = wizard.activeFlow === "pqc4337" ? "PQC-4337 Console" : "Quantum-Resistant Interactive Console"
   const flowSubtitle = wizard.activeFlow === "pqc4337"
     ? "Scheme-specific Falcon-ETH / ML-DSA-ETH smart account flow"
     : "Quantum-resistant Smart Account Deployment & Management"

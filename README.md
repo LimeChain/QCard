@@ -21,9 +21,10 @@ cd pqc-eth-poc
 npm install
 
 cp .env.example .env.local
-# Set only deploy credentials in .env.local:
+# For the full bundler-backed ERC-4337 flow, set these in .env.local:
 # PRIVATE_KEY=0x...
 # SEPOLIA_RPC_URL=https://...
+# NEXT_PUBLIC_PIMLICO_API_KEY=...
 #
 # Then deploy; script auto-writes all NEXT_PUBLIC_* addresses to .env.local
 ./scripts/deploy.sh
@@ -40,7 +41,7 @@ npm run dev
 
 ## Environment Variables
 
-If you use `./scripts/deploy.sh`, you only need to set `PRIVATE_KEY` and `SEPOLIA_RPC_URL` manually. The script auto-wires frontend `NEXT_PUBLIC_*` contract addresses in `.env.local`.
+If you use `./scripts/deploy.sh`, set `PRIVATE_KEY`, `SEPOLIA_RPC_URL`, and `NEXT_PUBLIC_PIMLICO_API_KEY` manually for the full bundler-backed ERC-4337 flow. The script auto-wires frontend contract addresses (`NEXT_PUBLIC_*`) in `.env.local`.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -54,7 +55,7 @@ If you use `./scripts/deploy.sh`, you only need to set `PRIVATE_KEY` and `SEPOLI
 | `NEXT_PUBLIC_PQC4337_FACTORY` | Yes for PQC-4337 | Factory for scheme-specific PQC-4337 accounts |
 | `NEXT_PUBLIC_FALCON_ETH_VERIFIER` | Yes for `falcon-eth` flow | ZKNOX ETHFALCON verifier used by PQC-4337 flow |
 | `NEXT_PUBLIC_MLDSA_ETH_VERIFIER` | Yes for `mldsa-eth` flow | ZKNOX ETHDILITHIUM verifier used by PQC-4337 flow |
-| `NEXT_PUBLIC_PIMLICO_API_KEY` | Recommended | ERC-4337 bundler key. Without it, app can fall back to direct wallet execution (no on-chain PQC `validateUserOp` path). Free tier at [dashboard.pimlico.io](https://dashboard.pimlico.io/) |
+| `NEXT_PUBLIC_PIMLICO_API_KEY` | Yes for full bundler flow | ERC-4337 bundler key required for the full on-chain PQC `validateUserOp` path. Free tier at [dashboard.pimlico.io](https://dashboard.pimlico.io/) |
 | `FALCON_ENGINE` | Optional for deploys | Existing ETHFALCON engine address. Leave unset to auto-deploy a fresh engine; set to `0x0...0` to skip Falcon support |
 
 ## Deploy Contracts
