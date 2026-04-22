@@ -1,6 +1,6 @@
 import { genCrystals } from "@noble/post-quantum/_crystals.js"
-import { falcon512, falcon512padded } from "@noble/post-quantum/falcon.js"
-import { bytesToHex, encodeAbiParameters, hexToBytes } from "viem"
+import * as falconLib from "@noble/post-quantum/falcon.js"
+import { bytesToHex, encodeAbiParameters, hexToBytes, keccak256 } from "viem"
 
 type Hex = `0x${string}`
 
@@ -27,6 +27,55 @@ const SALT_LEN = 40
 const COMPACT_BITS = 16
 const COMPACT_WORDS = (N * COMPACT_BITS) / 256
 const ALGO17_LIMIT = 2047
+const KQ = 61445
+
+const { falcon512, falcon512padded } = falconLib
+
+type FalconCompatModule = typeof falconLib & {
+  genFalcon?: (opts: unknown) => typeof falcon512padded
+  falcon512paddedOpts?: Record<string, unknown>
+}
+
+function hashToPointEVM(salt: Uint8Array, msg: Uint8Array): Uint16Array {
+  const concat = new Uint8Array(salt.length + msg.length)
+  concat.set(salt, 0)
+  concat.set(msg, salt.length)
+  const initialState = keccak256(concat, "bytes")
+  const extendedState = new Uint8Array(40)
+  extendedState.set(initialState, 0)
+  const view = new DataView(extendedState.buffer, extendedState.byteOffset, extendedState.byteLength)
+
+  const output = new Uint16Array(N)
+  let i = 0
+  let counter = BigInt(0)
+
+  while (i < N) {
+    const buffer = keccak256(extendedState, "bytes")
+    for (let chunkIdx = 0; chunkIdx < 16; chunkIdx++) {
+      const offset = chunkIdx * 2
+      const chunk = ((buffer[offset] as number) << 8) | (buffer[offset + 1] as number)
+      if (chunk < KQ) {
+        output[i++] = chunk % Q
+        if (i === N) break
+      }
+    }
+    counter += BigInt(1)
+    view.setBigUint64(32, counter, false)
+  }
+
+  return output
+}
+
+const falcon512paddedEth = (() => {
+  const compat = falconLib as FalconCompatModule
+  if (compat.genFalcon && compat.falcon512paddedOpts) {
+    return compat.genFalcon({
+      ...compat.falcon512paddedOpts,
+      hashToPoint: hashToPointEVM,
+    })
+  }
+  return falcon512padded
+})()
 
 function compactPoly256(coeffs: ArrayLike<number | bigint>, m: number): bigint[] {
   if (m >= 256) throw new Error("m must be < 256")
@@ -174,6 +223,6 @@ export function generateFalconEthKeypair(): {
 }
 
 export function signFalconEth(secretKeyHex: Hex, messageHashHex: Hex): Hex {
-  const signature = falcon512padded.sign(hexToBytes(messageHashHex), hexToBytes(secretKeyHex))
+  const signature = falcon512paddedEth.sign(hexToBytes(messageHashHex), hexToBytes(secretKeyHex))
   return encodeSignatureForZKNOX(signature)
 }
