@@ -1,6 +1,6 @@
+import { ml_dsa44eth } from "@noble/post-quantum/ml-dsa.js"
+import { encodeMlDsaPublicKey, keccakXofFactory } from "@noble/post-quantum/utils-eth.js"
 import { bytesToHex, hexToBytes } from "viem"
-import { keygenWithXof, signWithXof } from "./ml-dsa-eth.core"
-import { keccakXofFactory, preparePublicKeyForDeployment } from "./mldsa-encoding"
 
 type Hex = `0x${string}`
 
@@ -9,29 +9,18 @@ export function generateMlDsaEthKeypair(): {
   secretKeyHex: Hex
   encodedPublicKey: Hex
 } {
-  const zeta = new Uint8Array(32)
-  globalThis.crypto.getRandomValues(zeta)
-  const keypair = keygenWithXof(zeta, keccakXofFactory)
+  const { publicKey, secretKey } = ml_dsa44eth.keygen()
+
   return {
-    publicKeyHex: bytesToHex(keypair.publicKey),
-    secretKeyHex: bytesToHex(keypair.secretKey),
-    encodedPublicKey: preparePublicKeyForDeployment(
-      keypair.publicKey,
-      keccakXofFactory,
-      keccakXofFactory,
+    publicKeyHex: bytesToHex(publicKey),
+    secretKeyHex: bytesToHex(secretKey),
+    encodedPublicKey: bytesToHex(
+      encodeMlDsaPublicKey(publicKey, keccakXofFactory, keccakXofFactory),
     ),
   }
 }
 
 export function signMlDsaEth(secretKeyHex: Hex, messageHashHex: Hex): Hex {
-  const rnd = new Uint8Array(32)
-  globalThis.crypto.getRandomValues(rnd)
-  const signature = signWithXof(
-    hexToBytes(secretKeyHex),
-    hexToBytes(messageHashHex),
-    rnd,
-    new Uint8Array(0),
-    keccakXofFactory,
-  )
+  const signature = ml_dsa44eth.sign(hexToBytes(messageHashHex), hexToBytes(secretKeyHex))
   return bytesToHex(signature)
 }
