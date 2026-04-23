@@ -18,6 +18,7 @@ Both flows use ERC-4337 submission (Pimlico) for on-chain PQC verification.
 ```bash
 git clone --recurse-submodules https://github.com/LimeChain/pqc-eth-poc.git
 cd pqc-eth-poc
+git submodule update --init --recursive
 npm install
 
 cp .env.example .env.local
@@ -26,18 +27,27 @@ cp .env.example .env.local
 # SEPOLIA_RPC_URL=https://...
 # NEXT_PUBLIC_PIMLICO_API_KEY=...
 #
+# Optional if you want to skip HCA Falcon support entirely:
+# FALCON_ENGINE=0x0000000000000000000000000000000000000000
+#
+# Default deploy path includes Falcon self-tests, so prepare Falcon first:
+./scripts/setup-falcon.sh
+#
 # Then deploy; script auto-writes all NEXT_PUBLIC_* addresses to .env.local
 ./scripts/deploy.sh
-
-# Optional: needed only for HCA Falcon leaves (not needed for PQC-4337 flow)
-./scripts/setup-falcon.sh
 
 npm run dev
 # Open http://localhost:3000
 ```
 
-> **Why Python in this repo?** This is required only for **HCA Falcon leaves** (`/api/falcon/{keygen,sign}` against the ZKNox reference signer).  
+> **Why Python in this repo?** This is required for **HCA Falcon leaves** (`/api/falcon/{keygen,sign}` against the ZKNox reference signer) and for the Falcon self-tests run by `./scripts/deploy.sh` when Falcon support is enabled.  
 > The **PQC-4337 flow** signs in browser with `@noble/post-quantum`.
+
+If you already cloned the repo without `--recurse-submodules`, run:
+
+```bash
+git submodule update --init --recursive
+```
 
 ## Environment Variables
 
@@ -65,6 +75,8 @@ Requires [Foundry](https://getfoundry.sh/) and Sepolia ETH.
 ```bash
 curl -L https://foundry.paradigm.xyz | bash && foundryup
 
+git submodule update --init --recursive
+
 cd contracts && forge install && cd ..
 
 export PRIVATE_KEY=0xYOUR_KEY
@@ -79,6 +91,12 @@ By default, `./scripts/deploy.sh` deploys the full local stack in one run:
 - the HCA contracts (`LamportVerifier`, `ECDSAVerifier`, optional `FalconVerifier`, `HCAFactory`)
 - the PQC-4337 contracts (`ZKNOX_ethfalcon`, `ZKNOX_ethdilithium`, `PqcAccountFactory`)
 - automatic `.env.local` wiring for all HCA and PQC frontend addresses
+
+Before running the default Falcon-enabled deploy, prepare the local Falcon Python environment once:
+
+```bash
+./scripts/setup-falcon.sh
+```
 
 If you already trust an engine deployment, set `FALCON_ENGINE=0x...` before running the script. If you want to skip Falcon entirely on the HCA path, set `FALCON_ENGINE=0x0000000000000000000000000000000000000000`.
 

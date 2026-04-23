@@ -1,12 +1,14 @@
 import * as React from "react"
 import { Button } from "../ui/Button"
+import { Alert, AlertDescription, AlertTitle } from "../ui/Alert"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "../ui/Card"
 import { Input } from "../ui/Input"
-import { Copy, ExternalLink, RefreshCw, CheckCircle2 } from "lucide-react"
+import { Copy, RefreshCw, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 import { useWizard } from "@/lib/store"
 import { useBalance, useSendTransaction, useWaitForTransactionReceipt } from "wagmi"
 import { parseEther, formatEther } from "viem"
+import { toFriendlyUiError } from "@/lib/friendly-error"
 
 export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => void }) {
   const wizard = useWizard()
@@ -15,6 +17,7 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
     ? wizard.pqc4337.deployment?.accountAddress ?? ''
     : wizard.deployedAddresses?.hcaAccount ?? ''
   const [fundAmount, setFundAmount] = React.useState("0.3")
+  const [showErrorDetails, setShowErrorDetails] = React.useState(false)
 
   const {
     data: balanceData,
@@ -42,6 +45,16 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
     }
   }, [isConfirmed, refetchBalance])
 
+  const fundError = React.useMemo(
+    () =>
+      sendError
+        ? toFriendlyUiError(sendError, {
+            fallbackMessage: "The funding transaction did not complete.",
+          })
+        : null,
+    [sendError],
+  )
+
   const balance = balanceData ? formatEther(balanceData.value) : '0.00'
   const hasFunds = balanceData ? balanceData.value > BigInt(0) : false
 
@@ -51,6 +64,7 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
 
   const handleFund = () => {
     if (!accountAddress || !fundAmount) return
+    setShowErrorDetails(false)
     sendTransaction({
       to: accountAddress as `0x${string}`,
       value: parseEther(fundAmount),
@@ -107,8 +121,40 @@ export function Fund({ onNext, onBack }: { onNext: () => void, onBack: () => voi
               </div>
            </div>
 
-           {sendError && (
-             <p className="text-sm text-red-400">{sendError.message}</p>
+           {fundError && (
+             <Alert
+               variant="destructive"
+               className="border-red-500/40 bg-red-900/20 text-red-100"
+             >
+               <AlertTitle className="text-red-300">{fundError.title}</AlertTitle>
+               <AlertDescription className="space-y-2">
+                 <p className="text-sm text-red-100">{fundError.message}</p>
+                 {fundError.action && (
+                   <p className="text-xs text-red-200/90">{fundError.action}</p>
+                 )}
+                 {fundError.details && fundError.details !== fundError.message && (
+                   <div className="pt-1">
+                     <button
+                       type="button"
+                       onClick={() => setShowErrorDetails((prev) => !prev)}
+                       className="text-xs text-red-300 hover:text-red-200 underline inline-flex items-center gap-1"
+                     >
+                       {showErrorDetails ? (
+                         <ChevronUp className="w-3 h-3" />
+                       ) : (
+                         <ChevronDown className="w-3 h-3" />
+                       )}
+                       {showErrorDetails ? "Hide technical details" : "Show technical details"}
+                     </button>
+                     {showErrorDetails && (
+                       <p className="mt-2 text-[11px] font-mono whitespace-pre-wrap break-all text-red-100/80">
+                         {fundError.details}
+                       </p>
+                     )}
+                   </div>
+                 )}
+               </AlertDescription>
+             </Alert>
            )}
 
            <div className="flex flex-col gap-3 border-t border-border pt-6">

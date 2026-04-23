@@ -15,6 +15,46 @@ CONTRACTS_DIR="$PROJECT_DIR/contracts"
 ENV_FILE="$PROJECT_DIR/.env.local"
 FORGE="${FORGE:-$HOME/.foundry/bin/forge}"
 CAST="${CAST:-$HOME/.foundry/bin/cast}"
+FALCON_PYTHON="${PYTHON:-$PROJECT_DIR/contracts/lib/ETHFALCON/pythonref/myenv/bin/python}"
+
+require_contract_submodules() {
+  local missing=0
+  local path
+
+  for path in \
+    "$CONTRACTS_DIR/lib/forge-std/src" \
+    "$CONTRACTS_DIR/lib/ETHFALCON/src" \
+    "$CONTRACTS_DIR/lib/ETHDILITHIUM/src" \
+    "$CONTRACTS_DIR/lib/sstore2/contracts"
+  do
+    if [ ! -d "$path" ]; then
+      missing=1
+      break
+    fi
+  done
+
+  if [ "$missing" -eq 1 ]; then
+    echo "ERROR: Foundry contract submodules are missing."
+    echo "Run this first:"
+    echo "  git submodule update --init --recursive"
+    echo ""
+    echo "If you are cloning fresh, use:"
+    echo "  git clone --recurse-submodules <repo-url>"
+    exit 1
+  fi
+}
+
+require_falcon_self_test_env() {
+  if [ ! -x "$FALCON_PYTHON" ]; then
+    echo "ERROR: Falcon self-test Python env not found at $FALCON_PYTHON"
+    echo "Run this first to enable Falcon support:"
+    echo "  ./scripts/setup-falcon.sh"
+    echo ""
+    echo "Or skip Falcon support for this deploy:"
+    echo "  FALCON_ENGINE=0x0000000000000000000000000000000000000000 ./scripts/deploy.sh"
+    exit 1
+  fi
+}
 
 # Load .env.local if it exists
 if [ -f "$ENV_FILE" ]; then
@@ -26,6 +66,12 @@ fi
 # Check required vars
 : "${PRIVATE_KEY:?Set PRIVATE_KEY in .env.local or environment}"
 : "${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL in .env.local or environment}"
+
+require_contract_submodules
+
+if [ "${FALCON_ENGINE:-}" != "0x0000000000000000000000000000000000000000" ]; then
+  require_falcon_self_test_env
+fi
 
 SENDER=$($CAST wallet address --private-key "$PRIVATE_KEY")
 echo "Deployer:     $SENDER"

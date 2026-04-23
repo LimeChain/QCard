@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Sets up the Python environment used by /api/falcon/{keygen,sign}.
-# Run this once after cloning the repo, before `npm run dev`.
+# Sets up the Python environment used by /api/falcon/{keygen,sign}
+# and by Falcon deployment self-tests in ./scripts/deploy.sh.
+# Run this once after cloning the repo before using Falcon support.
 #
 # Requires: python3, uv (https://docs.astral.sh/uv/)
 
