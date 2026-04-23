@@ -2,7 +2,8 @@ import * as React from "react"
 import { Button } from "../ui/Button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/Card"
 import { Badge } from "../ui/Badge"
-import { Wallet, CheckCircle2, ExternalLink, AlertTriangle } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "../ui/Alert"
+import { Wallet, CheckCircle2, ExternalLink, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react"
 import { useAccount, useConnect, useDisconnect, usePublicClient, useSwitchChain } from "wagmi"
 import { getWalletClient } from "wagmi/actions"
 import { sepolia } from "wagmi/chains"
@@ -11,6 +12,7 @@ import { config } from "@/lib/wagmi"
 import { useWizard } from "@/lib/store"
 import { hcaFactoryAbi, pqc4337FactoryAbi } from "@/lib/contracts/abis"
 import { ADDRESSES } from "@/lib/contracts/addresses"
+import { fromFriendlyMessage, toFriendlyUiError, type FriendlyUiError } from "@/lib/friendly-error"
 
 export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => void }) {
   const { address, isConnected, chainId } = useAccount()
@@ -22,7 +24,8 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
 
   const [isDeploying, setIsDeploying] = React.useState(false)
   const [deployStatus, setDeployStatus] = React.useState("")
-  const [deployError, setDeployError] = React.useState<string | null>(null)
+  const [deployError, setDeployError] = React.useState<FriendlyUiError | null>(null)
+  const [showErrorDetails, setShowErrorDetails] = React.useState(false)
   const isPqcFlow = wizard.activeFlow === "pqc4337"
 
   const selectedPqcVerifier = wizard.pqc4337.scheme === "falcon-eth"
@@ -63,21 +66,22 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
 
   const handleDeploy = async () => {
     if (!publicClient || !address) {
-      setDeployError('Wallet not connected.')
+      setDeployError(fromFriendlyMessage("Wallet not connected."))
       return
     }
 
     if (isPqcFlow) {
       if (!wizard.pqc4337.keypair) {
-        setDeployError("No PQC keypair found. Go back to Step 2 and generate keys first. (Keys should persist across refresh until reset.)")
+        setDeployError(fromFriendlyMessage("No PQC keypair found. Go back to Step 2 and generate keys first. (Keys should persist across refresh until reset.)"))
         return
       }
       if (!pqcFactoryConfigured) {
-        setDeployError("PQC factory/verifier not configured. Set NEXT_PUBLIC_PQC4337_FACTORY and the scheme verifier address in .env.local.")
+        setDeployError(fromFriendlyMessage("PQC factory/verifier not configured. Set NEXT_PUBLIC_PQC4337_FACTORY and the scheme verifier address in .env.local."))
         return
       }
 
       setDeployError(null)
+      setShowErrorDetails(false)
       setIsDeploying(true)
       try {
         const walletClient = await getWalletClient(config, { chainId: 11155111 })
@@ -147,8 +151,11 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
         })
         wizard.setPqc4337LastTxHash(createHash)
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "PQC deployment failed"
-        setDeployError(msg)
+        setDeployError(
+          toFriendlyUiError(err, {
+            fallbackMessage: "The PQC account deployment did not complete.",
+          }),
+        )
       } finally {
         setIsDeploying(false)
         setDeployStatus("")
@@ -157,18 +164,19 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
     }
 
     if (!wizard.authRoot) {
-      setDeployError('No auth root generated. Go back to Step 2.')
+      setDeployError(fromFriendlyMessage("No auth root generated. Go back to Step 2."))
       return
     }
 
     if (!factoryConfigured) {
       setDeployError(
-        `Factory not deployed. Set NEXT_PUBLIC_HCA_FACTORY in .env.local.`
+        fromFriendlyMessage("Factory not deployed. Set NEXT_PUBLIC_HCA_FACTORY in .env.local.")
       )
       return
     }
 
     setDeployError(null)
+    setShowErrorDetails(false)
     setIsDeploying(true)
 
     try {
@@ -210,9 +218,15 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Deployment failed'
       if (msg.includes('could not be found')) {
-        setDeployError('Transaction submitted but receipt timed out. Sepolia may be congested. Check Etherscan and retry in a minute.')
+        setDeployError(
+          fromFriendlyMessage("Transaction submitted but receipt timed out. Sepolia may be congested. Check Etherscan and retry in a minute."),
+        )
       } else {
-        setDeployError(msg)
+        setDeployError(
+          toFriendlyUiError(err, {
+            fallbackMessage: "The account deployment did not complete.",
+          }),
+        )
       }
     } finally {
       setIsDeploying(false)
@@ -300,7 +314,39 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
             )}
 
             {deployError && (
-              <p className="text-sm text-red-400">{deployError}</p>
+              <Alert
+                variant="destructive"
+                className="border-red-500/40 bg-red-900/20 text-red-100"
+              >
+                <AlertTitle className="text-red-300">{deployError.title}</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p className="text-sm text-red-100">{deployError.message}</p>
+                  {deployError.action && (
+                    <p className="text-xs text-red-200/90">{deployError.action}</p>
+                  )}
+                  {deployError.details && deployError.details !== deployError.message && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowErrorDetails((prev) => !prev)}
+                        className="text-xs text-red-300 hover:text-red-200 underline inline-flex items-center gap-1"
+                      >
+                        {showErrorDetails ? (
+                          <ChevronUp className="w-3 h-3" />
+                        ) : (
+                          <ChevronDown className="w-3 h-3" />
+                        )}
+                        {showErrorDetails ? "Hide technical details" : "Show technical details"}
+                      </button>
+                      {showErrorDetails && (
+                        <p className="mt-2 text-[11px] font-mono whitespace-pre-wrap break-all text-red-100/80">
+                          {deployError.details}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </AlertDescription>
+              </Alert>
             )}
 
             {wizard.pqc4337.deployment && !pqcDeploymentMatchesConfig && (
@@ -431,7 +477,39 @@ export function Deploy({ onNext, onBack }: { onNext: () => void, onBack: () => v
           )}
 
           {deployError && (
-            <p className="text-sm text-red-400">{deployError}</p>
+            <Alert
+              variant="destructive"
+              className="border-red-500/40 bg-red-900/20 text-red-100"
+            >
+              <AlertTitle className="text-red-300">{deployError.title}</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p className="text-sm text-red-100">{deployError.message}</p>
+                {deployError.action && (
+                  <p className="text-xs text-red-200/90">{deployError.action}</p>
+                )}
+                {deployError.details && deployError.details !== deployError.message && (
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowErrorDetails((prev) => !prev)}
+                      className="text-xs text-red-300 hover:text-red-200 underline inline-flex items-center gap-1"
+                    >
+                      {showErrorDetails ? (
+                        <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      )}
+                      {showErrorDetails ? "Hide technical details" : "Show technical details"}
+                    </button>
+                    {showErrorDetails && (
+                      <p className="mt-2 text-[11px] font-mono whitespace-pre-wrap break-all text-red-100/80">
+                        {deployError.details}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </AlertDescription>
+            </Alert>
           )}
 
           {wizard.deployedAddresses && !deploymentMatchesConfig && (
