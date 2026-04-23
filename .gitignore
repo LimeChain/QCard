@@ -70,3 +70,6 @@ contracts/foundry.lock
 # Falcon Python backend venv
 contracts/lib/ETHFALCON/pythonref/myenv/
 contracts/lib/ETHFALCON/pythonref/*.pyc
+
+# aube lockfile (local alt-pm artifact)
+aube-lock.yaml
