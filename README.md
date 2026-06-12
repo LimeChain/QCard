@@ -1,4 +1,4 @@
-# PQC ETH PoC
+# QCard
 
 Interactive wizard for creating and using quantum-resistant Ethereum accounts. Supports both the [Hash-Committed Account (HCA)](https://ethereum-magicians.org/t/eip-8215-hash-committed-account-hca/28094) flow and the PQC-4337 scheme-specific account flow.
 
@@ -16,8 +16,8 @@ Both flows use ERC-4337 submission (Pimlico) for on-chain PQC verification.
 ## Quick Start
 
 ```bash
-git clone --recurse-submodules https://github.com/LimeChain/pqc-eth-poc.git
-cd pqc-eth-poc
+git clone --recurse-submodules https://github.com/LimeChain/qcard.git
+cd qcard
 git submodule update --init --recursive
 npm install
 
