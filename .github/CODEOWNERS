@@ -1,0 +1,11 @@
+# CODEOWNERS — https://docs.github.com/articles/about-code-owners
+#
+# Each line maps a path pattern to its owner(s). The LAST matching pattern wins.
+# Listed owners are automatically requested for review on matching pull requests.
+#
+# NOTE: GitHub does not accept a bare organization (e.g. @LimeChain) as an owner.
+# An owner must be a user (@username), an org team (@LimeChain/<team>), or the
+# email of a user with write access.
+
+# Default owner for everything in the repo.
+* @LimeChain/PQC
